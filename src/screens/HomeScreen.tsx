@@ -10,7 +10,11 @@ import HabitModal from '../components/HabitModal';
 import { AppData, Habit, getTodayKey } from '../types';
 import { loadData, saveData, getEntryForHabit, setHabitStatus } from '../utils/storage';
 
-export default function HomeScreen() {
+interface Props {
+  onDataChange?: (data: AppData) => void;
+}
+
+export default function HomeScreen({ onDataChange }: Props) {
   const [data, setData] = useState<AppData>({ habits: [], entries: [], totalXP: 0 });
   const [modalVisible, setModalVisible] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | undefined>();
@@ -24,7 +28,10 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (loaded) saveData(data);
+    if (loaded) {
+      saveData(data);
+      onDataChange?.(data);
+    }
   }, [data, loaded]);
 
   const today = getTodayKey();
@@ -93,6 +100,7 @@ export default function HomeScreen() {
       <HabitCard
         habit={item}
         entry={entry}
+        data={data}
         onYes={() => handleToggle(item, 'yes')}
         onNo={() => handleToggle(item, 'no')}
         onEdit={() => handleEdit(item)}
@@ -122,7 +130,7 @@ export default function HomeScreen() {
             <Text style={styles.emptyDesc}>Ajoute ta première habitude pour commencer à gagner de l'XP !</Text>
           </View>
         }
-        ListFooterComponent={<View style={{ height: 100 }} />}
+        ListFooterComponent={<View style={{ height: 160 }} />}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
@@ -185,7 +193,7 @@ const styles = StyleSheet.create({
   },
   fabWrapper: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 90,
     left: 0,
     right: 0,
     alignItems: 'center',

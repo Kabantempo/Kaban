@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppData, Habit, DailyEntry, getTodayKey } from '../types';
+import { AppData, Habit, DailyEntry, getTodayKey, isChallengeActive } from '../types';
 
-const STORAGE_KEY = 'xp_tracker_data';
+const STORAGE_KEY = 'xp_tracker_data_v2';
 
 const DEFAULT_DATA: AppData = {
   habits: [
@@ -13,6 +13,7 @@ const DEFAULT_DATA: AppData = {
       color: '#7C3AED',
       icon: '💪',
       createdAt: getTodayKey(),
+      type: 'daily',
     },
     {
       id: '2',
@@ -22,15 +23,23 @@ const DEFAULT_DATA: AppData = {
       color: '#2563EB',
       icon: '📚',
       createdAt: getTodayKey(),
+      type: 'daily',
     },
     {
       id: '3',
-      name: 'Boire de l\'eau',
-      description: '2 litres par jour',
-      xpReward: 30,
-      color: '#0891B2',
-      icon: '💧',
+      name: 'Pause sucre',
+      description: 'Zéro sucre ajouté',
+      xpReward: 100,
+      color: '#059669',
+      icon: '🍬',
       createdAt: getTodayKey(),
+      type: 'challenge',
+      startDate: getTodayKey(),
+      endDate: (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        return d.toISOString().split('T')[0];
+      })(),
     },
   ],
   entries: [],
@@ -51,29 +60,28 @@ export async function saveData(data: AppData): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-export function getTodayEntries(data: AppData): DailyEntry[] {
-  const today = getTodayKey();
-  return data.entries.filter(e => e.date === today);
+export function getEntryForHabit(data: AppData, habitId: string, date?: string): DailyEntry | undefined {
+  const d = date ?? getTodayKey();
+  return data.entries.find(e => e.date === d && e.habitId === habitId);
 }
 
-export function getEntryForHabit(data: AppData, habitId: string): DailyEntry | undefined {
+export function getTodayActiveHabits(data: AppData): Habit[] {
   const today = getTodayKey();
-  return data.entries.find(e => e.date === today && e.habitId === habitId);
+  return data.habits.filter(h => isChallengeActive(h, today));
 }
 
 export function setHabitStatus(
   data: AppData,
   habitId: string,
   status: 'yes' | 'no' | 'pending',
-  xpReward: number
+  xpReward: number,
+  date?: string,
 ): AppData {
-  const today = getTodayKey();
+  const today = date ?? getTodayKey();
   const existing = data.entries.find(e => e.date === today && e.habitId === habitId);
-
   let xpDelta = 0;
 
   if (existing) {
-    // Undo previous XP
     xpDelta -= existing.xpEarned;
     const newEntries = data.entries.filter(e => !(e.date === today && e.habitId === habitId));
     if (status !== 'pending') {
@@ -85,12 +93,10 @@ export function setHabitStatus(
   }
 
   if (status === 'pending') return data;
-
   const newXP = status === 'yes' ? xpReward : 0;
-  xpDelta += newXP;
   return {
     ...data,
     entries: [...data.entries, { date: today, habitId, status, xpEarned: newXP }],
-    totalXP: Math.max(0, data.totalXP + xpDelta),
+    totalXP: Math.max(0, data.totalXP + newXP),
   };
 }

@@ -38,7 +38,7 @@ export default function XPHeader({ totalXP, completedToday, totalHabits }: Props
     <LinearGradient colors={['#1A0533', '#0D1B4B']} style={styles.container}>
       <View style={styles.topRow}>
         <View>
-          <Text style={styles.appTitle}>XP TRACKER</Text>
+          <Text style={styles.appTitle}>⚡ XP TRACKER</Text>
           <Text style={styles.dateText}>{dateStr}</Text>
         </View>
         <View style={styles.levelBadge}>
