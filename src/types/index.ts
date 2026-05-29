@@ -1,5 +1,18 @@
 export type HabitType = 'daily' | 'challenge';
 
+export interface Profile {
+  id: string;
+  name: string;
+  emoji: string;
+  createdAt: string;
+}
+
+export interface AllProfiles {
+  profiles: Profile[];
+  activeId: string;
+  data: Record<string, AppData>;
+}
+
 export interface BadgeDef {
   id: string;
   name: string;

@@ -1,14 +1,16 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import { getXPProgress } from '../types';
+import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { getXPProgress, Profile } from '../types';
 
 interface Props {
   totalXP: number;
   completedToday: number;
   totalHabits: number;
+  profile: Profile;
+  onProfilePress: () => void;
 }
 
-export default function XPHeader({ totalXP, completedToday, totalHabits }: Props) {
+export default function XPHeader({ totalXP, completedToday, totalHabits, profile, onProfilePress }: Props) {
   const { level, current, required, percent } = getXPProgress(totalXP);
   const barAnim = useRef(new Animated.Value(0)).current;
 
@@ -26,10 +28,15 @@ export default function XPHeader({ totalXP, completedToday, totalHabits }: Props
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <View>
+        <TouchableOpacity onPress={onProfilePress} activeOpacity={0.7}>
           <Text style={styles.appTitle}>KABAN</Text>
+          <View style={styles.profileRow}>
+            <Text style={styles.profileEmoji}>{profile.emoji}</Text>
+            <Text style={styles.profileName}>{profile.name}</Text>
+            <Text style={styles.profileChevron}>›</Text>
+          </View>
           <Text style={styles.dateText}>{dateStr}</Text>
-        </View>
+        </TouchableOpacity>
         <View style={styles.levelBadge}>
           <Text style={styles.levelLabel}>NIV</Text>
           <Text style={styles.levelNumber}>{level}</Text>
@@ -88,9 +95,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 5,
   },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  profileEmoji: { fontSize: 13 },
+  profileName: { fontSize: 13, color: '#D1D5DB', fontWeight: '600' },
+  profileChevron: { fontSize: 16, color: '#6B7280' },
   dateText: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 11,
+    color: '#6B7280',
     marginTop: 2,
   },
   levelBadge: {
