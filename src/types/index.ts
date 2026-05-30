@@ -3,14 +3,58 @@ export type HabitType = 'daily' | 'challenge';
 export interface Profile {
   id: string;
   name: string;
-  emoji: string;
+  emoji: string;     // stocke la couleur de l'avatar
+  password?: string; // hash simple du mot de passe, absent si pas de mdp
   createdAt: string;
+}
+
+export type TaskStatus = 'todo' | 'done';
+
+export interface GroupTask {
+  id: string;
+  title: string;
+  description: string;
+  assignedTo: string[];  // profileIds
+  assignedBy: string;   // profileId
+  deadline?: string;    // YYYY-MM-DD
+  status: TaskStatus;
+  createdAt: string;
+}
+
+export interface LaboSession {
+  id: string;
+  profileId: string;
+  date: string;       // YYYY-MM-DD
+  startTime: string;  // HH:MM
+  endTime: string;    // HH:MM
+  duration: number;   // minutes
+  note?: string;
 }
 
 export interface AllProfiles {
   profiles: Profile[];
   activeId: string;
   data: Record<string, AppData>;
+  laboSessions?: LaboSession[];
+  groupTasks?: GroupTask[];
+}
+
+export function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+export function minutesToDuration(min: number): string {
+  if (min <= 0) return '0m';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+export function padTime(n: number): string {
+  return String(n).padStart(2, '0');
 }
 
 export interface BadgeDef {
@@ -55,9 +99,12 @@ export const HABIT_COLORS = [
 ];
 
 export const HABIT_ICONS = [
-  '💪', '📚', '🏃', '🧘', '🎯', '💧', '🍎', '😴',
-  '✍️', '🎨', '🎵', '🧠', '💊', '🌿', '🔥', '⭐',
-  '🚭', '🍬', '🍷', '💻', '🧹', '💰', '📱', '🎮',
+  'barbell-outline', 'book-outline', 'walk-outline', 'body-outline',
+  'radio-button-on-outline', 'water-outline', 'nutrition-outline', 'moon-outline',
+  'pencil-outline', 'color-palette-outline', 'musical-notes-outline', 'bulb-outline',
+  'medical-outline', 'leaf-outline', 'flame-outline', 'star-outline',
+  'ban-outline', 'cafe-outline', 'wine-outline', 'laptop-outline',
+  'brush-outline', 'cash-outline', 'phone-portrait-outline', 'game-controller-outline',
 ];
 
 export function getLevel(xp: number): number {
@@ -97,7 +144,7 @@ export const BADGES: BadgeDef[] = [
     id: 'first_yes',
     name: 'Premier Oui !',
     description: 'Complète ta première habitude',
-    icon: '🎯',
+    icon: 'flag-outline',
     rarity: 'common',
     check: d => d.entries.some(e => e.status === 'yes'),
   },
@@ -105,7 +152,7 @@ export const BADGES: BadgeDef[] = [
     id: 'entries_5',
     name: 'Régulier',
     description: '5 habitudes complétées au total',
-    icon: '💪',
+    icon: 'barbell-outline',
     rarity: 'common',
     check: d => d.entries.filter(e => e.status === 'yes').length >= 5,
   },
@@ -113,7 +160,7 @@ export const BADGES: BadgeDef[] = [
     id: 'entries_20',
     name: 'Assidu',
     description: '20 habitudes complétées au total',
-    icon: '🏃',
+    icon: 'walk-outline',
     rarity: 'rare',
     check: d => d.entries.filter(e => e.status === 'yes').length >= 20,
   },
@@ -121,7 +168,7 @@ export const BADGES: BadgeDef[] = [
     id: 'entries_50',
     name: 'Inarrêtable',
     description: '50 habitudes complétées au total',
-    icon: '⚡',
+    icon: 'flash-outline',
     rarity: 'epic',
     check: d => d.entries.filter(e => e.status === 'yes').length >= 50,
   },
@@ -129,7 +176,7 @@ export const BADGES: BadgeDef[] = [
     id: 'xp_100',
     name: 'Apprenti',
     description: 'Atteins 100 XP',
-    icon: '⭐',
+    icon: 'star-outline',
     rarity: 'common',
     check: d => d.totalXP >= 100,
   },
@@ -137,7 +184,7 @@ export const BADGES: BadgeDef[] = [
     id: 'xp_500',
     name: 'Initié',
     description: 'Atteins 500 XP',
-    icon: '💫',
+    icon: 'sparkles-outline',
     rarity: 'rare',
     check: d => d.totalXP >= 500,
   },
@@ -145,7 +192,7 @@ export const BADGES: BadgeDef[] = [
     id: 'xp_1000',
     name: 'Expert',
     description: 'Atteins 1 000 XP',
-    icon: '🏆',
+    icon: 'trophy-outline',
     rarity: 'epic',
     check: d => d.totalXP >= 1000,
   },
@@ -153,7 +200,7 @@ export const BADGES: BadgeDef[] = [
     id: 'xp_5000',
     name: 'Légende',
     description: 'Atteins 5 000 XP',
-    icon: '👑',
+    icon: 'diamond-outline',
     rarity: 'legendary',
     check: d => d.totalXP >= 5000,
   },
@@ -161,7 +208,7 @@ export const BADGES: BadgeDef[] = [
     id: 'streak_3',
     name: 'En feu !',
     description: '3 jours consécutifs',
-    icon: '🔥',
+    icon: 'flame-outline',
     rarity: 'common',
     check: d => getCurrentStreak(d) >= 3,
   },
@@ -169,7 +216,7 @@ export const BADGES: BadgeDef[] = [
     id: 'streak_7',
     name: 'Semaine de feu',
     description: '7 jours consécutifs',
-    icon: '🌟',
+    icon: 'star',
     rarity: 'rare',
     check: d => getCurrentStreak(d) >= 7,
   },
@@ -177,7 +224,7 @@ export const BADGES: BadgeDef[] = [
     id: 'habits_5',
     name: 'Collectionneur',
     description: 'Crée 5 habitudes',
-    icon: '📋',
+    icon: 'clipboard-outline',
     rarity: 'rare',
     check: d => d.habits.length >= 5,
   },
@@ -185,7 +232,7 @@ export const BADGES: BadgeDef[] = [
     id: 'challenge_done',
     name: 'Relevé le défi',
     description: 'Complète un défi à 100%',
-    icon: '🏅',
+    icon: 'medal-outline',
     rarity: 'epic',
     check: d => d.habits.some(h => {
       if (h.type !== 'challenge') return false;

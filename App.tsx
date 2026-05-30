@@ -4,6 +4,8 @@ import { View, StyleSheet } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import BadgesScreen from './src/screens/BadgesScreen';
+import LaboScreen from './src/screens/LaboScreen';
+import TasksScreen from './src/screens/TasksScreen';
 import TabBar, { TabName } from './src/components/TabBar';
 import ProfileModal from './src/components/ProfileModal';
 import { AllProfiles, AppData, checkBadges } from './src/types';
@@ -50,6 +52,8 @@ export default function App() {
         />
       )}
       {tab === 'calendar' && <CalendarScreen data={data} />}
+      {tab === 'labo'  && <LaboScreen  all={all} onChange={handleProfileChange} />}
+      {tab === 'tasks' && <TasksScreen all={all} onChange={handleProfileChange} />}
       {tab === 'badges' && <BadgesScreen data={data} />}
       <TabBar active={tab} onChange={setTab} />
       <ProfileModal
@@ -63,5 +67,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F9FAFB' },
+  root: { flex: 1, backgroundColor: '#09090F' },
 });

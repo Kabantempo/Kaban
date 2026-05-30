@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppData, AllProfiles, Profile, Habit, DailyEntry, getTodayKey, isChallengeActive, checkBadges } from '../types';
+import { AppData, AllProfiles, Profile, Habit, DailyEntry, LaboSession, GroupTask, TaskStatus, getTodayKey, isChallengeActive, checkBadges, timeToMinutes } from '../types';
 import { supabase, getDeviceId } from './supabase';
 
 const PROFILES_KEY = 'kaban_profiles_v1';
@@ -90,9 +90,18 @@ export function setActiveData(all: AllProfiles, data: AppData): AllProfiles {
   return { ...all, data: { ...all.data, [all.activeId]: data } };
 }
 
-export function createProfile(all: AllProfiles, name: string, emoji: string): AllProfiles {
+export function hashPassword(pwd: string): string {
+  let h = 5381;
+  for (let i = 0; i < pwd.length; i++) h = ((h << 5) + h) ^ pwd.charCodeAt(i);
+  return (h >>> 0).toString(36);
+}
+
+export function createProfile(all: AllProfiles, name: string, emoji: string, password?: string): AllProfiles {
   const id = `profile_${Date.now()}`;
-  const profile: Profile = { id, name, emoji, createdAt: getTodayKey() };
+  const profile: Profile = {
+    id, name, emoji, createdAt: getTodayKey(),
+    ...(password ? { password: hashPassword(password) } : {}),
+  };
   const emptyData: AppData = { habits: [], entries: [], totalXP: 0, earnedBadges: [] };
   return {
     ...all,
@@ -115,10 +124,17 @@ export function deleteProfile(all: AllProfiles, id: string): AllProfiles {
   return { ...all, profiles, activeId, data: newData };
 }
 
-export function renameProfile(all: AllProfiles, id: string, name: string, emoji: string): AllProfiles {
+// password: undefined = inchangé, null = supprimé, string = nouveau mdp
+export function renameProfile(all: AllProfiles, id: string, name: string, emoji: string, password?: string | null): AllProfiles {
   return {
     ...all,
-    profiles: all.profiles.map(p => p.id === id ? { ...p, name, emoji } : p),
+    profiles: all.profiles.map(p => {
+      if (p.id !== id) return p;
+      const updated = { ...p, name, emoji };
+      if (password === null)           delete updated.password;
+      else if (password !== undefined) updated.password = hashPassword(password);
+      return updated;
+    }),
   };
 }
 
@@ -157,6 +173,69 @@ export function setHabitStatus(
     ...data,
     entries: [...data.entries, { date: today, habitId, status, xpEarned: newXP }],
     totalXP: Math.max(0, data.totalXP + newXP),
+  };
+}
+
+export function addLaboSession(
+  all: AllProfiles, profileId: string, date: string,
+  startTime: string, endTime: string, note?: string,
+): AllProfiles {
+  const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+  if (duration <= 0) return all;
+  const session: LaboSession = {
+    id: Date.now().toString(), profileId, date, startTime, endTime, duration,
+    ...(note ? { note } : {}),
+  };
+  return { ...all, laboSessions: [...(all.laboSessions ?? []), session] };
+}
+
+export function deleteLaboSession(all: AllProfiles, id: string): AllProfiles {
+  return { ...all, laboSessions: (all.laboSessions ?? []).filter(s => s.id !== id) };
+}
+
+export function addGroupTask(
+  all: AllProfiles,
+  assignedBy: string,
+  assignedTo: string[],
+  title: string,
+  description: string,
+  deadline?: string,
+): AllProfiles {
+  const task: GroupTask = {
+    id: Date.now().toString(),
+    title: title.trim(),
+    description: description.trim(),
+    assignedBy,
+    assignedTo,
+    deadline,
+    status: 'todo',
+    createdAt: getTodayKey(),
+  };
+  return { ...all, groupTasks: [...(all.groupTasks ?? []), task] };
+}
+
+export function toggleGroupTask(all: AllProfiles, id: string): AllProfiles {
+  return {
+    ...all,
+    groupTasks: (all.groupTasks ?? []).map(t =>
+      t.id === id ? { ...t, status: (t.status === 'done' ? 'todo' : 'done') as TaskStatus } : t
+    ),
+  };
+}
+
+export function deleteGroupTask(all: AllProfiles, id: string): AllProfiles {
+  return { ...all, groupTasks: (all.groupTasks ?? []).filter(t => t.id !== id) };
+}
+
+export function editGroupTask(
+  all: AllProfiles, id: string,
+  title: string, description: string, assignedTo: string[], deadline?: string,
+): AllProfiles {
+  return {
+    ...all,
+    groupTasks: (all.groupTasks ?? []).map(t =>
+      t.id === id ? { ...t, title: title.trim(), description: description.trim(), assignedTo, deadline } : t
+    ),
   };
 }
 
