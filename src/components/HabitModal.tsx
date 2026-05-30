@@ -4,7 +4,6 @@ import {
   TextInput, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
 
 function formatDateInput(raw: string): string {
   const d = raw.replace(/\D/g, '').slice(0, 8);
