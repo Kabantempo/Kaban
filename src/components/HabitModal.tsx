@@ -4,8 +4,26 @@ import {
   TextInput, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Habit, HABIT_ICONS, HABIT_COLORS, getTodayKey, HabitType } from '../types';
+import { Platform } from 'react-native';
+
+function formatDateInput(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+function parseDisplayDate(val: string): string | undefined {
+  const m = val.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return undefined;
+  const d = new Date(`${m[3]}-${m[2]}-${m[1]}`);
+  if (isNaN(d.getTime())) return undefined;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+function isoToDisplay(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+import { Habit, HABIT_ICONS, HABIT_COLORS, getTodayKey, HabitType, padTime } from '../types';
 import { T } from '../theme';
 
 interface Props {
@@ -22,8 +40,8 @@ export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
   const [icon,           setIcon]           = useState(HABIT_ICONS[0]);
   const [color,          setColor]          = useState(HABIT_COLORS[0]);
   const [type,           setType]           = useState<HabitType>('daily');
-  const [endDate,        setEndDate]        = useState<Date>(new Date(Date.now() + 30 * 86400000));
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [endDateRaw, setEndDateRaw] = useState('');
+  const [dateError,  setDateError]  = useState(false);
 
   useEffect(() => {
     if (habit) {
@@ -33,29 +51,31 @@ export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
       setIcon(HABIT_ICONS.includes(habit.icon) ? habit.icon : HABIT_ICONS[0]);
       setColor(HABIT_COLORS.includes(habit.color) ? habit.color : HABIT_COLORS[0]);
       setType(habit.type ?? 'daily');
-      if (habit.endDate) setEndDate(new Date(habit.endDate));
+      setEndDateRaw(habit.endDate ? isoToDisplay(habit.endDate) : '');
     } else {
       setName(''); setDescription(''); setXpReward('50');
       setIcon(HABIT_ICONS[0]); setColor(HABIT_COLORS[0]);
-      setType('daily'); setEndDate(new Date(Date.now() + 30 * 86400000));
+      setType('daily'); setEndDateRaw('');
     }
+    setDateError(false);
   }, [habit, visible]);
 
   function handleSave() {
     if (!name.trim()) return;
+    let endDate: string | undefined;
+    if (type === 'challenge' && endDateRaw) {
+      endDate = parseDisplayDate(endDateRaw);
+      if (!endDate) { setDateError(true); return; }
+    }
     onSave({
       name: name.trim(),
       description: description.trim(),
       xpReward: Math.max(1, parseInt(xpReward) || 50),
-      color,
-      icon,
-      type,
+      color, icon, type,
       startDate: type === 'challenge' ? getTodayKey() : undefined,
-      endDate:   type === 'challenge' ? endDate.toISOString().split('T')[0] : undefined,
+      endDate,
     });
   }
-
-  const endDateStr = endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -151,19 +171,20 @@ export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
             {type === 'challenge' && (
               <>
                 <Text style={styles.label}>Date de fin du défi</Text>
-                <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
+                <View style={[styles.dateBtn, dateError && { borderColor: T.error + '88' }]}>
                   <Ionicons name="calendar-outline" size={18} color={T.text2} />
-                  <Text style={styles.dateText}>{endDateStr}</Text>
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={endDate}
-                    mode="date"
-                    minimumDate={new Date()}
-                    onChange={(_, d) => { setShowDatePicker(false); if (d) setEndDate(d); }}
-                    themeVariant="dark"
+                  <TextInput
+                    style={styles.dateInput}
+                    value={endDateRaw}
+                    onChangeText={t => { setEndDateRaw(formatDateInput(t)); setDateError(false); }}
+                    placeholder="JJ/MM/AAAA"
+                    placeholderTextColor={T.text3}
+                    keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'}
+                    maxLength={10}
+                    selectionColor={T.accent}
                   />
-                )}
+                </View>
+                {dateError && <Text style={styles.dateError}>Format attendu : JJ/MM/AAAA</Text>}
               </>
             )}
 
@@ -226,9 +247,10 @@ const styles = StyleSheet.create({
   dateBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: T.input, borderRadius: 14, paddingHorizontal: 16,
-    paddingVertical: 13, borderWidth: 1, borderColor: T.border,
+    borderWidth: 1, borderColor: T.border,
   },
-  dateText: { fontSize: 15, color: T.text, fontWeight: '600' },
+  dateInput: { flex: 1, paddingVertical: 13, color: T.text, fontSize: 15 },
+  dateError: { fontSize: 11, color: T.error, fontWeight: '600', marginTop: 4 },
   btnRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   cancelBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 14,

@@ -97,6 +97,7 @@ export function hashPassword(pwd: string): string {
 }
 
 export function createProfile(all: AllProfiles, name: string, emoji: string, password?: string): AllProfiles {
+  if (all.profiles.length >= 6) return all; // max 6 profils
   const id = `profile_${Date.now()}`;
   const profile: Profile = {
     id, name, emoji, createdAt: getTodayKey(),
