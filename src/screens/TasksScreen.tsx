@@ -47,7 +47,7 @@ function TaskCard({
   const color     = assignees[0] ? avatarColor(assignees[0]) : T.accent;
   const done      = task.status === 'done';
   const overdue   = !done && isOverdue(task.deadline);
-  const isMyTask  = task.assignedTo === activeId;
+  const isMyTask  = assignedIds.includes(activeId);
 
   return (
     <View style={[styles.card, done && styles.cardDone, overdue && styles.cardOverdue]}>

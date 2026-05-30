@@ -47,7 +47,7 @@ function TimeInput({
   iconColor: string;
   value: string;
   onChange: (v: string) => void;
-  nextRef?: React.RefObject<TextInput>;
+  nextRef?: React.RefObject<TextInput | null>;
 }) {
   const [raw,   setRaw]   = useState(value);
   const [error, setError] = useState(false);
