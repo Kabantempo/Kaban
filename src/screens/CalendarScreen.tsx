@@ -203,9 +203,11 @@ export default function CalendarScreen({ data, all }: Props) {
                     : percent >= 0.34 ? '#B45309'
                     : '#991B1B';
 
+                  const cellH = DAY_SIZE + dayTasks.length * 13;
+
                   return (
-                    <View key={di} style={[styles.cell, { width: DAY_SIZE, height: DAY_SIZE }]}>
-                      <View style={[styles.dayInner, isToday && styles.todayBorder]}>
+                    <View key={di} style={[styles.cell, { width: DAY_SIZE, height: cellH }]}>
+                      <View style={[styles.dayInner, isToday && styles.todayBorder, { height: cellH }]}>
                         <View style={[StyleSheet.absoluteFill, styles.emptyDayBg]} />
 
                         {/* Numéro */}
@@ -216,27 +218,33 @@ export default function CalendarScreen({ data, all }: Props) {
                           !isFuture && filters.has('habits') && percent > 0 && styles.dayNumActive,
                         ]}>{day}</Text>
 
+                        {/* Titres des tâches */}
+                        {dayTasks.map(task => {
+                          const done   = task.status === 'done';
+                          const tColor = done ? T.success : T.error;
+                          return (
+                            <Text key={task.id} style={[styles.taskInCell, { color: tColor }]} numberOfLines={1}>
+                              {task.title}
+                            </Text>
+                          );
+                        })}
+
+                        {/* Dots défis */}
+                        <View style={styles.indicators}>
+                          {activeChallenges.slice(0, 2).map(h => (
+                            <View key={h.id} style={[styles.dot, { backgroundColor: h.color }]} />
+                          ))}
+                        </View>
+
                         {/* Barre de progression habitudes */}
                         {filters.has('habits') && !isFuture && dailyHabits.length > 0 && (
                           <View style={styles.habitBarTrack}>
                             <View style={[styles.habitBarFill, {
                               width: `${pctInt}%` as any,
                               backgroundColor: barColor,
-                              shadowColor: pctInt === 100 ? T.accent : 'transparent',
-                              shadowOpacity: 0.8,
-                              shadowRadius: 4,
-                              shadowOffset: { width: 0, height: 0 },
                             }]} />
                           </View>
                         )}
-
-                        {/* Dots défis / tâches */}
-                        <View style={styles.indicators}>
-                          {activeChallenges.slice(0, 2).map(h => (
-                            <View key={h.id} style={[styles.dot, { backgroundColor: h.color }]} />
-                          ))}
-                          {hasTasks && <View style={[styles.dot, { backgroundColor: '#3B82F6' }]} />}
-                        </View>
                       </View>
                     </View>
                   );
@@ -266,25 +274,6 @@ export default function CalendarScreen({ data, all }: Props) {
                 );
               })}
 
-              {/* Tâches dues cette semaine */}
-              {filters.has('tasks') && weekDates.map((date, di) => {
-                if (!date) return null;
-                const dayTaskList = tasksThisMonth[date] ?? [];
-                if (!dayTaskList.length) return null;
-                return dayTaskList.map((task, ti) => {
-                  const barLeft = di * DAY_SIZE + 2;
-                  const done    = task.status === 'done';
-                  const tColor  = done ? T.success : T.error;
-                  return (
-                    <View key={task.id + ti} style={styles.taskBarRow}>
-                      <View style={[styles.taskBar, { left: barLeft, width: DAY_SIZE - 4, backgroundColor: tColor + '22', borderColor: tColor + '55' }]}>
-                        <View style={[styles.taskBarDot, { backgroundColor: tColor }]} />
-                        <Text style={[styles.taskBarLabel, { color: tColor }]} numberOfLines={1}>{task.title}</Text>
-                      </View>
-                    </View>
-                  );
-                });
-              })}
             </View>
           );
         })}
@@ -390,10 +379,7 @@ const styles = StyleSheet.create({
   challengeBarFill:{ position: 'absolute', top: 0, left: 0, bottom: 0, borderRadius: 8 },
   challengeBarLabel:{ fontSize: 8, fontWeight: '700', paddingHorizontal: 6, zIndex: 1 },
 
-  taskBarRow: { height: 18, position: 'relative', marginBottom: 1 },
-  taskBar:    { position: 'absolute', top: 1, height: 16, borderRadius: 6, borderWidth: 1, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 4 },
-  taskBarDot: { width: 5, height: 5, borderRadius: 2.5, flexShrink: 0 },
-  taskBarLabel:{ fontSize: 8, fontWeight: '600', color: '#3B82F6', flex: 1 },
+  taskInCell: { fontSize: 7, fontWeight: '700', width: '100%', textAlign: 'center', paddingHorizontal: 2, lineHeight: 13 },
 
   legend:      { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 14 },
   legendTitle: { fontSize: 10, color: T.accentSoft, fontWeight: '700', letterSpacing: 1, marginBottom: 8, textTransform: 'uppercase' },
