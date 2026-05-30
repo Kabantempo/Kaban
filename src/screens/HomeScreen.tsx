@@ -6,6 +6,7 @@ import HabitCard from '../components/HabitCard';
 import HabitModal from '../components/HabitModal';
 import { AppData, Habit, Profile, getTodayKey } from '../types';
 import { getEntryForHabit, setHabitStatus, autoCompleteChallengesToday, saveAllProfiles } from '../utils/storage';
+import TeamOverview from '../components/TeamOverview';
 import { T } from '../theme';
 
 interface Props {
@@ -13,9 +14,10 @@ interface Props {
   profileData?: AppData;
   profile?: Profile;
   onProfilePress?: () => void;
+  all?: import('../types').AllProfiles;
 }
 
-export default function HomeScreen({ onDataChange, profileData, profile, onProfilePress }: Props) {
+export default function HomeScreen({ onDataChange, profileData, profile, onProfilePress, all }: Props) {
   const [data, setData] = useState<AppData>(
     profileData ?? { habits: [], entries: [], totalXP: 0, earnedBadges: [] }
   );
@@ -95,13 +97,41 @@ export default function HomeScreen({ onDataChange, profileData, profile, onProfi
         renderItem={renderItem}
         extraData={data}
         ListHeaderComponent={
-          <XPHeader
-            totalXP={data.totalXP}
-            completedToday={completedToday}
-            totalHabits={data.habits.length}
-            profile={profile ?? { id: '', name: 'Moi', emoji: T.accent, createdAt: '' }}
-            onProfilePress={onProfilePress ?? (() => {})}
-          />
+          <>
+            <XPHeader
+              totalXP={data.totalXP}
+              completedToday={completedToday}
+              totalHabits={data.habits.length}
+              profile={profile ?? { id: '', name: 'Moi', emoji: T.accent, createdAt: '' }}
+              onProfilePress={onProfilePress ?? (() => {})}
+            />
+            {all && all.profiles.length > 1 && (
+              <TeamOverview all={all} activeProfileId={profile?.id ?? ''} />
+            )}
+            {/* Tâches du jour */}
+            {all && (() => {
+              const today = getTodayKey();
+              const myId  = profile?.id ?? '';
+              const todayTasks = (all.groupTasks ?? []).filter(t => {
+                const ids = Array.isArray(t.assignedTo) ? t.assignedTo : [t.assignedTo];
+                return ids.includes(myId) && t.deadline === today && t.status === 'todo';
+              });
+              if (!todayTasks.length) return null;
+              return (
+                <View style={styles.todayTasksWrap}>
+                  <Text style={styles.todayTasksLabel}>
+                    <Ionicons name="alert-circle-outline" size={11} color={T.error} /> Tâches à rendre aujourd'hui
+                  </Text>
+                  {todayTasks.map(task => (
+                    <View key={task.id} style={styles.todayTaskRow}>
+                      <View style={[styles.todayTaskDot, { backgroundColor: T.error }]} />
+                      <Text style={styles.todayTaskTitle} numberOfLines={1}>{task.title}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </>
         }
         ListEmptyComponent={
           <View style={styles.empty}>
@@ -138,6 +168,11 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: T.bg },
   list: { paddingTop: 0 },
   empty: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 40 },
+  todayTasksWrap: { marginHorizontal: 14, marginTop: 4, backgroundColor: T.error + '11', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: T.error + '33' },
+  todayTasksLabel: { fontSize: 10, color: T.error, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6 },
+  todayTaskRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  todayTaskDot: { width: 5, height: 5, borderRadius: 2.5 },
+  todayTaskTitle: { fontSize: 12, color: T.error, fontWeight: '600', flex: 1 },
   emptyIconBg: { marginBottom: 20 },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: T.text, marginBottom: 8 },
   emptyDesc: { fontSize: 14, color: T.text2, textAlign: 'center', lineHeight: 20 },

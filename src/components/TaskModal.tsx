@@ -4,7 +4,7 @@ import {
   TextInput, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Profile, GroupTask, HABIT_COLORS } from '../types';
+import { Profile, GroupTask, HABIT_COLORS, TaskPriority } from '../types';
 import { T } from '../theme';
 
 const AVATAR_COLORS = HABIT_COLORS;
@@ -38,7 +38,7 @@ interface Props {
   profiles: Profile[];
   activeId: string;
   task?: GroupTask;
-  onSave: (title: string, description: string, assignedTo: string[], deadline?: string) => void;
+  onSave: (title: string, description: string, assignedTo: string[], deadline?: string, priority?: TaskPriority) => void;
   onClose: () => void;
 }
 
@@ -46,6 +46,7 @@ export default function TaskModal({ visible, profiles, activeId, task, onSave, o
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
   const [assignedTo,  setAssignedTo]  = useState<string[]>([activeId]);
+  const [priority,    setPriority]    = useState<TaskPriority>('medium');
   const [dateRaw,     setDateRaw]     = useState('');
   const [dateError,   setDateError]   = useState(false);
   const [error,       setError]       = useState('');
@@ -55,10 +56,11 @@ export default function TaskModal({ visible, profiles, activeId, task, onSave, o
       setTitle(task.title);
       setDescription(task.description);
       setAssignedTo(Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo]);
+      setPriority(task.priority ?? 'medium');
       setDateRaw(isoToDisplay(task.deadline));
     } else {
       setTitle(''); setDescription('');
-      setAssignedTo([activeId]); setDateRaw('');
+      setAssignedTo([activeId]); setPriority('medium'); setDateRaw('');
     }
     setError(''); setDateError(false);
   }, [task, visible, activeId]);
@@ -77,7 +79,7 @@ export default function TaskModal({ visible, profiles, activeId, task, onSave, o
       deadline = parseDate(dateRaw);
       if (!deadline) { setDateError(true); setError('Date invalide (format JJ/MM/AAAA).'); return; }
     }
-    onSave(title.trim(), description.trim(), assignedTo, deadline);
+    onSave(title.trim(), description.trim(), assignedTo, deadline, priority);
     onClose();
   }
 
@@ -137,6 +139,24 @@ export default function TaskModal({ visible, profiles, activeId, task, onSave, o
                 );
               })}
             </ScrollView>
+
+            {/* Priorité */}
+            <Text style={styles.label}>Priorité</Text>
+            <View style={styles.priorityRow}>
+              {([
+                { id: 'high',   label: '🔴 Haute',   color: '#EF4444' },
+                { id: 'medium', label: '🟡 Moyenne',  color: '#F59E0B' },
+                { id: 'low',    label: '🟢 Basse',    color: T.success },
+              ] as { id: TaskPriority; label: string; color: string }[]).map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.priorityBtn, priority === p.id && { borderColor: p.color, backgroundColor: p.color + '20' }]}
+                  onPress={() => setPriority(p.id)}
+                >
+                  <Text style={[styles.priorityTxt, priority === p.id && { color: p.color }]}>{p.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             {/* Deadline */}
             <Text style={styles.label}>
@@ -223,4 +243,7 @@ const styles = StyleSheet.create({
   cancelText:{ color: T.text2, fontWeight: '600', fontSize: 15 },
   saveBtn:   { flex: 2, flexDirection: 'row', paddingVertical: 15, borderRadius: 14, backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center', gap: 6 },
   saveText:  { color: '#fff', fontWeight: '800', fontSize: 15 },
+  priorityRow: { flexDirection: 'row', gap: 8 },
+  priorityBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.input, alignItems: 'center' },
+  priorityTxt: { fontSize: 12, fontWeight: '700', color: T.text2 },
 });

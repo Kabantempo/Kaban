@@ -93,6 +93,7 @@ export default function App() {
           profileData={data}
           profile={activeProfile}
           onProfilePress={() => setShowPicker(true)}
+          all={all}
         />
       )}
       {tab === 'calendar' && <CalendarScreen data={data} all={all} onChange={handleProfileChange} />}

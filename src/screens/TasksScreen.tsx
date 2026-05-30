@@ -5,9 +5,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { AllProfiles, Profile, GroupTask, HABIT_COLORS, getTodayKey } from '../types';
+import { AllProfiles, Profile, GroupTask, TaskPriority, HABIT_COLORS, getTodayKey } from '../types';
 import {
-  addGroupTask, toggleGroupTask, deleteGroupTask, editGroupTask, saveAllProfiles,
+  addGroupTask, toggleGroupTask, deleteGroupTask, editGroupTask, addTaskComment, saveAllProfiles,
 } from '../utils/storage';
 import TaskModal from '../components/TaskModal';
 import { T } from '../theme';
@@ -64,9 +64,21 @@ function TaskCard({
           >
             {done && <Ionicons name="checkmark" size={12} color="#fff" />}
           </Pressable>
-          <Text style={[styles.cardTitle, done && styles.cardTitleDone]} numberOfLines={2}>
-            {task.title}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.cardTitle, done && styles.cardTitleDone]} numberOfLines={2}>
+              {task.title}
+            </Text>
+            {task.priority === 'high' && (
+              <View style={styles.priorityTag}>
+                <Text style={styles.priorityTagTxt}>🔴 Priorité haute</Text>
+              </View>
+            )}
+            {task.priority === 'low' && (
+              <View style={[styles.priorityTag, { backgroundColor: T.success + '22', borderColor: T.success + '55' }]}>
+                <Text style={[styles.priorityTagTxt, { color: T.success }]}>🟢 Priorité basse</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.cardActions}>
             <TouchableOpacity onPress={onEdit} style={styles.actionBtn}>
               <Ionicons name="pencil-outline" size={14} color={T.text3} />
@@ -140,7 +152,10 @@ export default function TasksScreen({ all, onChange }: Props) {
     return true;
   });
 
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
   const todo = filtered.filter(t => t.status === 'todo').sort((a, b) => {
+    const po = (PRIORITY_ORDER[a.priority ?? 'medium'] ?? 1) - (PRIORITY_ORDER[b.priority ?? 'medium'] ?? 1);
+    if (po !== 0) return po;
     if (!a.deadline && !b.deadline) return 0;
     if (!a.deadline) return 1;
     if (!b.deadline) return -1;
@@ -148,12 +163,12 @@ export default function TasksScreen({ all, onChange }: Props) {
   });
   const done = filtered.filter(t => t.status === 'done');
 
-  function handleSave(title: string, desc: string, assignedTo: string[], deadline?: string) {
+  function handleSave(title: string, desc: string, assignedTo: string[], deadline?: string, priority?: TaskPriority) {
     let updated: AllProfiles;
     if (editingTask) {
-      updated = editGroupTask(all, editingTask.id, title, desc, assignedTo, deadline);
+      updated = editGroupTask(all, editingTask.id, title, desc, assignedTo, deadline, priority);
     } else {
-      updated = addGroupTask(all, activeId, assignedTo, title, desc, deadline);
+      updated = addGroupTask(all, activeId, assignedTo, title, desc, deadline, priority);
     }
     onChange(updated); saveAllProfiles(updated);
     setEditingTask(undefined);
@@ -354,5 +369,7 @@ const styles = StyleSheet.create({
 
   fabWrapper: { position: 'absolute', bottom: 90, left: 0, right: 0, alignItems: 'center' },
   fab: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 32, gap: 8, backgroundColor: T.accent, shadowColor: T.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 8 },
-  fabText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  fabText:      { color: '#fff', fontSize: 15, fontWeight: '700' },
+  priorityTag:  { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: '#EF444422', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3, borderWidth: 1, borderColor: '#EF444455' },
+  priorityTagTxt:{ fontSize: 9, fontWeight: '700', color: '#EF4444' },
 });

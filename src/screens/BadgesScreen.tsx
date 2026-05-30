@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet, StatusBar, SafeAreaView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { AppData, AllProfiles, BADGES, BadgeDef, Profile, HABIT_COLORS } from '../types';
+import { AppData, AllProfiles, BADGES, BadgeDef, Profile, HABIT_COLORS, getXPProgress } from '../types';
 import { T } from '../theme';
 
 const RARITY: Record<BadgeDef['rarity'], { color: string; label: string }> = {
@@ -17,7 +17,7 @@ function avatarColor(p: Profile) {
   return /^#[0-9A-Fa-f]{6}$/.test(p.emoji) ? p.emoji : AVATAR_COLORS[0];
 }
 
-type ViewMode = 'mine' | 'team';
+type ViewMode = 'mine' | 'team' | 'rank';
 
 function BadgeCard({ badge, earned }: { badge: BadgeDef; earned: boolean }) {
   const r = RARITY[badge.rarity];
@@ -127,22 +127,20 @@ export default function BadgesScreen({ data, all }: Props) {
 
       {/* Toggle Mes badges / Équipe */}
       <View style={styles.toggle}>
-        {(['mine', 'team'] as ViewMode[]).map(m => (
-          <TouchableOpacity
-            key={m}
-            style={[styles.toggleBtn, viewMode === m && styles.toggleBtnActive]}
-            onPress={() => setViewMode(m)}
-          >
-            <Ionicons
-              name={m === 'mine' ? 'person-outline' : 'people-outline'}
-              size={14}
-              color={viewMode === m ? T.accentSoft : T.text3}
-            />
-            <Text style={[styles.toggleText, viewMode === m && styles.toggleTextActive]}>
-              {m === 'mine' ? 'Mes badges' : 'Équipe'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {([
+            { id: 'mine', label: 'Mes badges', icon: 'person-outline' },
+            { id: 'team', label: 'Équipe',     icon: 'people-outline' },
+            { id: 'rank', label: 'Classement', icon: 'podium-outline' },
+          ] as { id: ViewMode; label: string; icon: string }[]).map(m => (
+            <TouchableOpacity
+              key={m.id}
+              style={[styles.toggleBtn, viewMode === m.id && styles.toggleBtnActive]}
+              onPress={() => setViewMode(m.id)}
+            >
+              <Ionicons name={m.icon as any} size={13} color={viewMode === m.id ? T.accentSoft : T.text3} />
+              <Text style={[styles.toggleText, viewMode === m.id && styles.toggleTextActive]}>{m.label}</Text>
+            </TouchableOpacity>
+          ))}
       </View>
 
       {viewMode === 'mine' ? (
@@ -155,6 +153,45 @@ export default function BadgesScreen({ data, all }: Props) {
           renderItem={({ item }) => <BadgeCard badge={item} earned={earned.has(item.id)} />}
           ListFooterComponent={<View style={{ height: 110 }} />}
           showsVerticalScrollIndicator={false}
+        />
+      ) : viewMode === 'rank' ? (
+        // ── Leaderboard XP ──
+        <FlatList
+          data={[...all.profiles].sort((a, b) => {
+            const xa = all.data[a.id]?.totalXP ?? 0;
+            const xb = all.data[b.id]?.totalXP ?? 0;
+            return xb - xa;
+          })}
+          keyExtractor={p => p.id}
+          contentContainerStyle={styles.teamList}
+          ListFooterComponent={<View style={{ height: 110 }} />}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item: profile, index }) => {
+            const pData  = all.data[profile.id] ?? { habits: [], entries: [], totalXP: 0, earnedBadges: [] };
+            const { level, current, required, percent } = getXPProgress(pData.totalXP);
+            const color  = avatarColor(profile);
+            const medals = ['🥇','🥈','🥉'];
+            const badgeCount = (pData.earnedBadges ?? []).length;
+            return (
+              <View style={styles.rankRow}>
+                <Text style={styles.rankNum}>{index < 3 ? medals[index] : `#${index+1}`}</Text>
+                <View style={[styles.rankAvatar, { backgroundColor: color }]}>
+                  <Text style={styles.rankInitial}>{profile.name.charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={styles.rankInfo}>
+                  <View style={styles.rankNameRow}>
+                    <Text style={styles.rankName}>{profile.name}</Text>
+                    <Text style={styles.rankLevel}>Niv {level}</Text>
+                    <Text style={styles.rankBadges}>{badgeCount} 🏆</Text>
+                  </View>
+                  <View style={styles.rankBarTrack}>
+                    <View style={[styles.rankBarFill, { width: `${Math.round(percent * 100)}%` as any, backgroundColor: color }]} />
+                  </View>
+                  <Text style={styles.rankXP}>{pData.totalXP.toLocaleString('fr-FR')} XP</Text>
+                </View>
+              </View>
+            );
+          }}
         />
       ) : (
         <FlatList
@@ -204,6 +241,18 @@ const styles = StyleSheet.create({
   tagText:    { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
 
   teamList: { paddingHorizontal: 14, paddingTop: 4 },
+  rankRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.card, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: T.border },
+  rankNum:      { fontSize: 20, width: 32, textAlign: 'center' },
+  rankAvatar:   { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  rankInitial:  { color: '#fff', fontWeight: '800', fontSize: 16 },
+  rankInfo:     { flex: 1, gap: 4 },
+  rankNameRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rankName:     { fontSize: 15, fontWeight: '700', color: T.text, flex: 1 },
+  rankLevel:    { fontSize: 11, color: T.accentSoft, fontWeight: '700' },
+  rankBadges:   { fontSize: 11, color: T.text2 },
+  rankBarTrack: { height: 4, backgroundColor: T.cardAlt, borderRadius: 2, overflow: 'hidden' },
+  rankBarFill:  { height: '100%', borderRadius: 2 },
+  rankXP:       { fontSize: 10, color: T.text3, fontWeight: '600' },
   memberSection: { backgroundColor: T.card, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: T.border, overflow: 'hidden' },
   memberHeader:  { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 10 },
   memberAvatar:  { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

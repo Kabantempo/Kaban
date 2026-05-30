@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Habit, DailyEntry, getChallengeProgress, AppData, HABIT_ICONS } from '../types';
+import { Habit, DailyEntry, getChallengeProgress, AppData, HABIT_ICONS, getHabitStreak } from '../types';
 import { T } from '../theme';
 
 const SWIPE_THRESHOLD = 60;
@@ -27,8 +27,9 @@ export default function HabitCard({ habit, entry, data, onYes, onNo, onEdit, onD
   const status      = entry?.status ?? 'pending';
   const isChallenge = habit.type === 'challenge';
   const progress    = isChallenge ? getChallengeProgress(data, habit) : null;
-  const iconName    = HABIT_ICONS.includes(habit.icon) ? habit.icon : HABIT_ICONS[0];
-  const color       = habit.color || T.accent;
+  const iconName = HABIT_ICONS.includes(habit.icon) ? habit.icon : HABIT_ICONS[0];
+  const color    = habit.color || T.accent;
+  const streak   = getHabitStreak(data, habit.id);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -165,10 +166,18 @@ export default function HabitCard({ habit, entry, data, onYes, onNo, onEdit, onD
 
             {/* Ligne du bas */}
             <View style={styles.bottomRow}>
-              {/* XP badge */}
-              <View style={[styles.xpBadge, { borderColor: color + '44' }]}>
-                <Ionicons name="flash" size={10} color={color} />
-                <Text style={[styles.xpText, { color }]}>+{habit.xpReward} XP</Text>
+              {/* XP + streak */}
+              <View style={styles.xpRow}>
+                <View style={[styles.xpBadge, { borderColor: color + '44' }]}>
+                  <Ionicons name="flash" size={10} color={color} />
+                  <Text style={[styles.xpText, { color }]}>+{habit.xpReward} XP</Text>
+                </View>
+                {streak >= 2 && (
+                  <View style={styles.streakBadge}>
+                    <Ionicons name="flame" size={10} color="#F59E0B" />
+                    <Text style={styles.streakText}>{streak}j</Text>
+                  </View>
+                )}
               </View>
 
               {/* Boutons statut */}
@@ -308,6 +317,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
   },
   xpText: { fontSize: 11, fontWeight: '800' },
+  xpRow:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#F59E0B22', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3, borderWidth: 1, borderColor: '#F59E0B44' },
+  streakText: { fontSize: 10, fontWeight: '800', color: '#F59E0B' },
 
   btns: { flexDirection: 'row', gap: 6 },
   btn: {

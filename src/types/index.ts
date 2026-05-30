@@ -8,16 +8,26 @@ export interface Profile {
   createdAt: string;
 }
 
-export type TaskStatus = 'todo' | 'done';
+export type TaskStatus   = 'todo' | 'done';
+export type TaskPriority = 'high' | 'medium' | 'low';
+
+export interface TaskComment {
+  id: string;
+  profileId: string;
+  text: string;
+  createdAt: string;
+}
 
 export interface GroupTask {
   id: string;
   title: string;
   description: string;
-  assignedTo: string[];  // profileIds
-  assignedBy: string;   // profileId
-  deadline?: string;    // YYYY-MM-DD
+  assignedTo: string[];
+  assignedBy: string;
+  deadline?: string;
   status: TaskStatus;
+  priority?: TaskPriority;
+  comments?: TaskComment[];
   createdAt: string;
 }
 
@@ -37,6 +47,18 @@ export interface AllProfiles {
   data: Record<string, AppData>;
   laboSessions?: LaboSession[];
   groupTasks?: GroupTask[];
+}
+
+export function getHabitStreak(data: AppData, habitId: string): number {
+  let streak = 0;
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const key = d.toISOString().split('T')[0];
+    if (!data.entries.some(e => e.habitId === habitId && e.date === key && e.status === 'yes')) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
 }
 
 export function timeToMinutes(time: string): number {

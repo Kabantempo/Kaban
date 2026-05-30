@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppData, AllProfiles, Profile, Habit, DailyEntry, LaboSession, GroupTask, TaskStatus, getTodayKey, isChallengeActive, checkBadges, timeToMinutes } from '../types';
+import { AppData, AllProfiles, Profile, Habit, DailyEntry, LaboSession, GroupTask, TaskStatus, TaskPriority, TaskComment, getTodayKey, isChallengeActive, checkBadges, timeToMinutes } from '../types';
 import { supabase, getTeamId } from './supabase';
 
 const PROFILES_KEY = 'kaban_profiles_v1';
@@ -211,24 +211,25 @@ export function deleteLaboSession(all: AllProfiles, id: string): AllProfiles {
 }
 
 export function addGroupTask(
-  all: AllProfiles,
-  assignedBy: string,
-  assignedTo: string[],
-  title: string,
-  description: string,
-  deadline?: string,
+  all: AllProfiles, assignedBy: string, assignedTo: string[],
+  title: string, description: string, deadline?: string, priority?: TaskPriority,
 ): AllProfiles {
   const task: GroupTask = {
-    id: Date.now().toString(),
-    title: title.trim(),
-    description: description.trim(),
-    assignedBy,
-    assignedTo,
-    deadline,
-    status: 'todo',
-    createdAt: getTodayKey(),
+    id: Date.now().toString(), title: title.trim(), description: description.trim(),
+    assignedBy, assignedTo, deadline, priority: priority ?? 'medium',
+    status: 'todo', comments: [], createdAt: getTodayKey(),
   };
   return { ...all, groupTasks: [...(all.groupTasks ?? []), task] };
+}
+
+export function addTaskComment(all: AllProfiles, taskId: string, profileId: string, text: string): AllProfiles {
+  const comment: TaskComment = { id: Date.now().toString(), profileId, text: text.trim(), createdAt: getTodayKey() };
+  return {
+    ...all,
+    groupTasks: (all.groupTasks ?? []).map(t =>
+      t.id === taskId ? { ...t, comments: [...(t.comments ?? []), comment] } : t
+    ),
+  };
 }
 
 export function toggleGroupTask(all: AllProfiles, id: string): AllProfiles {
@@ -246,12 +247,12 @@ export function deleteGroupTask(all: AllProfiles, id: string): AllProfiles {
 
 export function editGroupTask(
   all: AllProfiles, id: string,
-  title: string, description: string, assignedTo: string[], deadline?: string,
+  title: string, description: string, assignedTo: string[], deadline?: string, priority?: TaskPriority,
 ): AllProfiles {
   return {
     ...all,
     groupTasks: (all.groupTasks ?? []).map(t =>
-      t.id === id ? { ...t, title: title.trim(), description: description.trim(), assignedTo, deadline } : t
+      t.id === id ? { ...t, title: title.trim(), description: description.trim(), assignedTo, deadline, priority: priority ?? t.priority } : t
     ),
   };
 }
