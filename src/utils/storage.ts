@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppData, AllProfiles, Profile, Habit, DailyEntry, LaboSession, GroupTask, TaskStatus, getTodayKey, isChallengeActive, checkBadges, timeToMinutes } from '../types';
 import { supabase, getTeamId } from './supabase';
+export { loadFromSupabase };
 
 const PROFILES_KEY = 'kaban_profiles_v1';
 const LEGACY_KEY = 'xp_tracker_data_v2';
@@ -28,8 +29,7 @@ function makeDefaultProfiles(): AllProfiles {
 
 async function syncToSupabase(all: AllProfiles): Promise<void> {
   try {
-    const teamId = await getTeamId();
-    if (!teamId) return;
+    const teamId = getTeamId();
     await supabase.from('kaban_data').upsert(
       { device_id: teamId, data: all, updated_at: new Date().toISOString() },
       { onConflict: 'device_id' }
@@ -39,8 +39,7 @@ async function syncToSupabase(all: AllProfiles): Promise<void> {
 
 export async function loadFromSupabase(): Promise<AllProfiles | null> {
   try {
-    const teamId = await getTeamId();
-    if (!teamId) return null;
+    const teamId = getTeamId();
     const { data, error } = await supabase.from('kaban_data').select('data').eq('device_id', teamId).single();
     if (error || !data) return null;
     const parsed = data.data as AllProfiles;
@@ -49,14 +48,6 @@ export async function loadFromSupabase(): Promise<AllProfiles | null> {
   } catch {
     return null;
   }
-}
-
-// Vérifie si un code d'équipe existe déjà dans Supabase
-export async function teamExists(teamId: string): Promise<boolean> {
-  try {
-    const { data } = await supabase.from('kaban_data').select('device_id').eq('device_id', teamId.toUpperCase()).single();
-    return !!data;
-  } catch { return false; }
 }
 
 export async function loadAllProfiles(): Promise<AllProfiles> {

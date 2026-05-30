@@ -6,44 +6,33 @@ import CalendarScreen from './src/screens/CalendarScreen';
 import BadgesScreen from './src/screens/BadgesScreen';
 import LaboScreen from './src/screens/LaboScreen';
 import TasksScreen from './src/screens/TasksScreen';
-import TeamSetupScreen from './src/screens/TeamSetupScreen';
+import ProfilePickerScreen from './src/screens/ProfilePickerScreen';
 import TabBar, { TabName } from './src/components/TabBar';
 import { AllProfiles, AppData, checkBadges } from './src/types';
 import {
   loadAllProfiles, saveAllProfiles, getActiveData, setActiveData, loadFromSupabase,
 } from './src/utils/storage';
-import { getTeamId, getMyProfileId, setMyProfileId } from './src/utils/supabase';
 
 const POLL_INTERVAL = 30000;
 
 export default function App() {
   const [tab,        setTab]        = useState<TabName>('home');
-  const [ready,      setReady]      = useState(false);   // setup terminé
+  const [showPicker, setShowPicker] = useState(true);
   const [all,        setAll]        = useState<AllProfiles>({ profiles: [], activeId: '', data: {} });
-  const [myId,       setMyId]       = useState('');
-  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Chargement initial
+  // Chargement initial depuis Supabase partagé
   useEffect(() => {
-    (async () => {
-      const teamId   = await getTeamId();
-      const profileId = await getMyProfileId();
-      if (teamId && profileId) {
-        const loaded = await loadAllProfiles();
-        // S'assurer que le profil existe encore dans l'équipe
-        if (loaded.profiles.some(p => p.id === profileId)) {
-          const withActive = { ...loaded, activeId: profileId };
-          setAll(withActive);
-          setMyId(profileId);
-          setReady(true);
-          return;
-        }
+    loadAllProfiles().then(loaded => {
+      setAll(loaded);
+      if (loaded.profiles.length === 1 && !loaded.profiles[0].password) {
+        // 1 seul profil sans mdp → sélection auto
+        setShowPicker(false);
       }
-      // Pas encore configuré
-    })();
+    });
   }, []);
 
-  // Polling 30s
+  // Polling 30s pour sync équipe
   const startPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
@@ -53,7 +42,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
     startPolling();
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active') {
@@ -62,7 +50,10 @@ export default function App() {
       } else if (pollRef.current) clearInterval(pollRef.current);
     });
     return () => { sub.remove(); if (pollRef.current) clearInterval(pollRef.current); };
-  }, [ready, startPolling]);
+  }, [startPolling]);
+
+  const data          = getActiveData(all);
+  const activeProfile = all.profiles.find(p => p.id === all.activeId) ?? all.profiles[0];
 
   function handleDataChange(newData: AppData) {
     const checked = checkBadges(newData);
@@ -76,20 +67,23 @@ export default function App() {
     saveAllProfiles(newAll);
   }
 
-  function handleTeamReady(initialAll: AllProfiles, profileId: string) {
-    const withActive = { ...initialAll, activeId: profileId };
-    setAll(withActive);
-    setMyId(profileId);
-    setMyProfileId(profileId);
-    setReady(true);
+  function handleSelectProfile(profileId: string) {
+    const newAll = { ...all, activeId: profileId };
+    setAll(newAll);
+    saveAllProfiles(newAll);
+    setShowPicker(false);
   }
 
-  if (!ready) {
-    return <TeamSetupScreen onReady={handleTeamReady} />;
+  // Écran Netflix si pas encore de profil sélectionné
+  if (showPicker || !all.activeId) {
+    return (
+      <ProfilePickerScreen
+        all={all}
+        onChange={newAll => { setAll(newAll); saveAllProfiles(newAll); }}
+        onSelect={handleSelectProfile}
+      />
+    );
   }
-
-  const data          = getActiveData(all);
-  const activeProfile = all.profiles.find(p => p.id === myId) ?? all.profiles[0];
 
   return (
     <View style={styles.root}>
@@ -98,7 +92,7 @@ export default function App() {
           onDataChange={handleDataChange}
           profileData={data}
           profile={activeProfile}
-          onProfilePress={() => {}} // plus de changement de profil
+          onProfilePress={() => setShowPicker(true)}
         />
       )}
       {tab === 'calendar' && <CalendarScreen data={data} all={all} />}
