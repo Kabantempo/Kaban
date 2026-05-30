@@ -229,11 +229,9 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                     : percent >= 0.34 ? '#B45309'
                     : '#991B1B';
 
-                  const cellH = DAY_SIZE + dayTasks.length * 13;
-
                   return (
-                    <View key={di} style={[styles.cell, { width: DAY_SIZE, height: cellH }]}>
-                      <View style={[styles.dayInner, isToday && styles.todayBorder, { height: cellH }]}>
+                    <View key={di} style={[styles.cell, { width: DAY_SIZE, height: DAY_SIZE }]}>
+                      <View style={[styles.dayInner, isToday && styles.todayBorder]}>
                         <View style={[StyleSheet.absoluteFill, styles.emptyDayBg]} />
 
                         {/* Numéro */}
