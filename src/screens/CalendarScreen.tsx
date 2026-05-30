@@ -272,23 +272,15 @@ export default function CalendarScreen({ data, all }: Props) {
                 const dayTaskList = tasksThisMonth[date] ?? [];
                 if (!dayTaskList.length) return null;
                 return dayTaskList.map((task, ti) => {
-                  const assignees = all.profiles.filter(p =>
-                    (Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo]).includes(p.id)
-                  );
-                  const color = assignees[0] ? avatarColor(assignees[0].emoji) : '#3B82F6';
                   const barLeft = di * DAY_SIZE + 2;
+                  const done    = task.status === 'done';
+                  const tColor  = done ? T.success : T.error;
                   return (
                     <View key={task.id + ti} style={styles.taskBarRow}>
-                      {(() => {
-                        const done   = task.status === 'done';
-                        const tColor = done ? T.success : T.error;
-                        return (
-                          <View style={[styles.taskBar, { left: barLeft, width: DAY_SIZE - 4, backgroundColor: tColor + '22', borderColor: tColor + '55' }]}>
-                            <View style={[styles.taskBarDot, { backgroundColor: tColor }]} />
-                                <Text style={[styles.taskBarLabel, { color: tColor }]} numberOfLines={1}>{task.title}</Text>
-                          </View>
-                        );
-                      })()}
+                      <View style={[styles.taskBar, { left: barLeft, width: DAY_SIZE - 4, backgroundColor: tColor + '22', borderColor: tColor + '55' }]}>
+                        <View style={[styles.taskBarDot, { backgroundColor: tColor }]} />
+                        <Text style={[styles.taskBarLabel, { color: tColor }]} numberOfLines={1}>{task.title}</Text>
+                      </View>
                     </View>
                   );
                 });
