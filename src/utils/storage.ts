@@ -6,15 +6,7 @@ const PROFILES_KEY = 'kaban_profiles_v1';
 const LEGACY_KEY = 'xp_tracker_data_v2';
 
 function makeDefaultAppData(): AppData {
-  return {
-    habits: [
-      { id: '1', name: 'Faire du sport', description: '30 minutes minimum', xpReward: 80, color: '#111827', icon: '💪', createdAt: getTodayKey(), type: 'daily' },
-      { id: '2', name: 'Lire', description: '20 pages par jour', xpReward: 50, color: '#111827', icon: '📚', createdAt: getTodayKey(), type: 'daily' },
-    ],
-    entries: [],
-    totalXP: 0,
-    earnedBadges: [],
-  };
+  return { habits: [], entries: [], totalXP: 0, earnedBadges: [] };
 }
 
 function makeDefaultProfiles(): AllProfiles {

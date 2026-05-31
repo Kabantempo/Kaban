@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { getXPProgress, Profile } from '../types';
 import { T } from '../theme';
+import NotifSettingsModal from './NotifSettingsModal';
 
 const AVATAR_COLORS = ['#7C5CFC','#2563EB','#059669','#D97706','#DC2626','#DB2777','#0891B2','#65A30D'];
 
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function XPHeader({ totalXP, completedToday, totalHabits, profile, onProfilePress }: Props) {
+  const [showNotif, setShowNotif] = React.useState(false);
   const { level, current, required, percent } = getXPProgress(totalXP);
   const barAnim  = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -75,6 +77,11 @@ export default function XPHeader({ totalXP, completedToday, totalHabits, profile
           <Ionicons name="chevron-forward" size={14} color={T.text3} />
         </Pressable>
 
+        {/* Cloche notif */}
+        <Pressable onPress={() => setShowNotif(true)} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, padding: 6 }]}>
+          <Ionicons name="notifications-outline" size={20} color={T.text2} />
+        </Pressable>
+
         {/* Badge niveau */}
         <LinearGradient
           colors={['#68C470', '#3A8C46', '#2A6B34']}
@@ -109,6 +116,7 @@ export default function XPHeader({ totalXP, completedToday, totalHabits, profile
         <View style={styles.statDiv} />
         <StatCell value={totalHabits} label="Total" color={T.text2} />
       </View>
+      <NotifSettingsModal visible={showNotif} onClose={() => setShowNotif(false)} />
     </LinearGradient>
   );
 }
