@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  StatusBar, Alert, Pressable, Modal, TextInput, ScrollView,
+  StatusBar, Alert, Pressable, Modal, TextInput, ScrollView, Linking, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,40 +55,62 @@ function CommitCard({ commit }: { commit: GitHubCommit }) {
   );
 }
 
-function GitHubModal({ repos, onSave, onClose, onRefresh }: {
+function GitHubModal({ token: initialToken, repos: initialRepos, onSave, onClose, onRefresh }: {
+  token?: string;
   repos: GitHubRepo[];
-  onSave: (repos: GitHubRepo[]) => void;
+  onSave: (token: string, repos: GitHubRepo[]) => void;
   onClose: () => void;
   onRefresh: () => void;
 }) {
-  const [list,     setList]     = useState<GitHubRepo[]>(repos);
-  const [repoInput, setRepoInput] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
-  const [error,    setError]    = useState('');
+  const [step,      setStep]      = useState<'token' | 'repos'>(initialToken ? 'repos' : 'token');
+  const [token,     setToken]     = useState(initialToken ?? '');
+  const [allRepos,  setAllRepos]  = useState<{ owner: string; repo: string; private: boolean }[]>([]);
+  const [selected,  setSelected]  = useState<Set<string>>(new Set(initialRepos.map(r => `${r.owner}/${r.repo}`)));
+  const [search,    setSearch]    = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
 
-  function handleAdd() {
-    const trimmed = repoInput.trim().replace(/^https?:\/\/github\.com\//, '');
-    const parts = trimmed.split('/');
-    if (parts.length < 2 || !parts[0] || !parts[1]) {
-      setError('Format attendu : proprietaire/repo');
-      return;
-    }
-    const newRepo: GitHubRepo = { owner: parts[0], repo: parts[1] };
-    if (tokenInput.trim()) newRepo.token = tokenInput.trim();
-    setList(prev => [...prev, newRepo]);
-    setRepoInput('');
-    setTokenInput('');
+  useEffect(() => {
+    if (initialToken && step === 'repos') loadRepos(initialToken);
+  }, []);
+
+  async function loadRepos(t: string) {
+    setLoading(true);
     setError('');
+    try {
+      const res = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+        headers: { Authorization: `token ${t}`, Accept: 'application/vnd.github.v3+json' },
+      });
+      if (!res.ok) { setError('Token invalide ou expiré.'); setLoading(false); return; }
+      const data = await res.json();
+      setAllRepos(data.map((r: any) => ({ owner: r.owner.login, repo: r.name, private: r.private })));
+      setStep('repos');
+    } catch {
+      setError('Erreur de connexion.');
+    }
+    setLoading(false);
   }
 
-  function handleRemove(idx: number) {
-    setList(prev => prev.filter((_, i) => i !== idx));
+  function toggleRepo(key: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   }
 
   function handleSave() {
-    onSave(list);
+    const repos: GitHubRepo[] = [...selected].map(key => {
+      const [owner, repo] = key.split('/');
+      return { owner, repo, token };
+    });
+    onSave(token, repos);
     onClose();
   }
+
+  const filtered = allRepos.filter(r =>
+    `${r.owner}/${r.repo}`.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -97,60 +119,100 @@ function GitHubModal({ repos, onSave, onClose, onRefresh }: {
         <View style={styles.ghHandle} />
         <View style={styles.ghTitleRow}>
           <Ionicons name="logo-github" size={20} color={T.text} />
-          <Text style={styles.ghTitle}>Repos GitHub</Text>
-          <TouchableOpacity onPress={onRefresh} style={styles.ghRefreshBtn}>
-            <Ionicons name="refresh-outline" size={16} color={T.accentSoft} />
-            <Text style={styles.ghRefreshTxt}>Actualiser</Text>
-          </TouchableOpacity>
+          <Text style={styles.ghTitle}>
+            {step === 'token' ? 'Connexion GitHub' : 'Sélectionner des repos'}
+          </Text>
+          {step === 'repos' && (
+            <TouchableOpacity onPress={onRefresh} style={styles.ghRefreshBtn}>
+              <Ionicons name="refresh-outline" size={16} color={T.accentSoft} />
+              <Text style={styles.ghRefreshTxt}>Sync</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
-          {list.length === 0 && (
-            <Text style={styles.ghEmpty}>Aucun repo configuré.</Text>
-          )}
-          {list.map((r, i) => (
-            <View key={i} style={styles.ghRepoRow}>
-              <Ionicons name="git-branch-outline" size={14} color={T.text3} />
-              <Text style={styles.ghRepoName}>{r.owner}/{r.repo}</Text>
-              {r.token && <Ionicons name="lock-closed" size={10} color={T.text3} />}
-              <TouchableOpacity onPress={() => handleRemove(i)} style={{ marginLeft: 'auto' as any }}>
-                <Ionicons name="trash-outline" size={14} color={T.error} />
+        {step === 'token' ? (
+          <>
+            <Text style={styles.ghDesc}>
+              Crée un token GitHub avec accès aux repos, puis colle-le ici.
+            </Text>
+            <TouchableOpacity
+              style={styles.ghOpenBtn}
+              onPress={() => Linking.openURL('https://github.com/settings/tokens/new?scopes=repo&description=Kaban')}
+            >
+              <Ionicons name="open-outline" size={14} color="#58a6ff" />
+              <Text style={styles.ghOpenTxt}>Créer un token sur GitHub</Text>
+            </TouchableOpacity>
+            <Text style={styles.ghSectionLabel}>Token d'accès</Text>
+            <TextInput
+              style={styles.ghInput}
+              value={token}
+              onChangeText={t => { setToken(t); setError(''); }}
+              placeholder="ghp_xxxxxxxxxxxx"
+              placeholderTextColor={T.text3}
+              selectionColor={T.accent}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+            {!!error && <Text style={styles.ghError}>{error}</Text>}
+            <TouchableOpacity
+              style={[styles.ghSaveBtn, (!token.trim() || loading) && { opacity: 0.5 }]}
+              onPress={() => token.trim() && loadRepos(token.trim())}
+              disabled={!token.trim() || loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.ghSaveTxt}>Connexion →</Text>
+              }
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <View style={styles.ghConnectedRow}>
+              <Ionicons name="checkmark-circle" size={14} color={T.success} />
+              <Text style={styles.ghConnectedTxt}>Connecté</Text>
+              <TouchableOpacity onPress={() => { setStep('token'); setAllRepos([]); }} style={{ marginLeft: 'auto' as any }}>
+                <Text style={styles.ghDisconnectTxt}>Déconnecter</Text>
               </TouchableOpacity>
             </View>
-          ))}
-        </ScrollView>
 
-        <Text style={styles.ghSectionLabel}>Ajouter un repo</Text>
-        <TextInput
-          style={styles.ghInput}
-          value={repoInput}
-          onChangeText={t => { setRepoInput(t); setError(''); }}
-          placeholder="proprietaire/repo  ou  lien GitHub"
-          placeholderTextColor={T.text3}
-          selectionColor={T.accent}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <TextInput
-          style={[styles.ghInput, { marginTop: 8 }]}
-          value={tokenInput}
-          onChangeText={setTokenInput}
-          placeholder="Token GitHub (optionnel, pour repos privés)"
-          placeholderTextColor={T.text3}
-          selectionColor={T.accent}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-        />
-        {!!error && <Text style={styles.ghError}>{error}</Text>}
-        <TouchableOpacity style={styles.ghAddBtn} onPress={handleAdd}>
-          <Ionicons name="add" size={16} color={T.accentSoft} />
-          <Text style={styles.ghAddTxt}>Ajouter</Text>
-        </TouchableOpacity>
+            <TextInput
+              style={[styles.ghInput, { marginBottom: 8 }]}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Rechercher un repo…"
+              placeholderTextColor={T.text3}
+              selectionColor={T.accent}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
-        <TouchableOpacity style={styles.ghSaveBtn} onPress={handleSave}>
-          <Text style={styles.ghSaveTxt}>Enregistrer</Text>
-        </TouchableOpacity>
+            {loading ? (
+              <ActivityIndicator color={T.accentSoft} style={{ marginVertical: 20 }} />
+            ) : (
+              <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                {filtered.length === 0 && <Text style={styles.ghEmpty}>Aucun repo trouvé.</Text>}
+                {filtered.map(r => {
+                  const key = `${r.owner}/${r.repo}`;
+                  const checked = selected.has(key);
+                  return (
+                    <TouchableOpacity key={key} style={styles.ghRepoRow} onPress={() => toggleRepo(key)}>
+                      <View style={[styles.ghCheckbox, checked && styles.ghCheckboxChecked]}>
+                        {checked && <Ionicons name="checkmark" size={11} color="#fff" />}
+                      </View>
+                      <Ionicons name={r.private ? 'lock-closed-outline' : 'git-branch-outline'} size={13} color={T.text3} />
+                      <Text style={styles.ghRepoName} numberOfLines={1}>{r.owner}/{r.repo}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <TouchableOpacity style={styles.ghSaveBtn} onPress={handleSave}>
+              <Text style={styles.ghSaveTxt}>Enregistrer ({selected.size} repo{selected.size > 1 ? 's' : ''})</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </Modal>
   );
@@ -305,8 +367,8 @@ export default function TasksScreen({ all, onChange }: Props) {
     setRefreshing(false);
   }
 
-  function handleSaveRepos(newRepos: GitHubRepo[]) {
-    const updated = { ...all, githubRepos: newRepos };
+  function handleSaveRepos(newToken: string, newRepos: GitHubRepo[]) {
+    const updated = { ...all, githubToken: newToken, githubRepos: newRepos };
     onChange(updated);
     saveAllProfiles(updated);
     if (newRepos.length) {
@@ -490,6 +552,7 @@ export default function TasksScreen({ all, onChange }: Props) {
 
       {ghModalVisible && (
         <GitHubModal
+          token={all.githubToken}
           repos={repos}
           onSave={handleSaveRepos}
           onClose={() => setGhModalVisible(false)}
@@ -591,22 +654,28 @@ const styles = StyleSheet.create({
   ghSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: T.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 20, paddingBottom: 40,
+    padding: 20, paddingBottom: 44,
     borderTopWidth: 1, borderTopColor: T.border,
   },
-  ghHandle:    { width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  ghTitleRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-  ghTitle:     { fontSize: 17, fontWeight: '800', color: T.text, flex: 1 },
-  ghRefreshBtn:{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.accentDim, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
-  ghRefreshTxt:{ fontSize: 12, color: T.accentSoft, fontWeight: '700' },
-  ghEmpty:     { fontSize: 13, color: T.text3, textAlign: 'center', paddingVertical: 12 },
-  ghRepoRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.cardAlt, borderRadius: 10, padding: 10, marginBottom: 6 },
-  ghRepoName:  { fontSize: 13, color: T.text, fontWeight: '600', flex: 1 },
+  ghHandle:       { width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  ghTitleRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  ghTitle:        { fontSize: 17, fontWeight: '800', color: T.text, flex: 1 },
+  ghRefreshBtn:   { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.accentDim, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
+  ghRefreshTxt:   { fontSize: 12, color: T.accentSoft, fontWeight: '700' },
+  ghDesc:         { fontSize: 13, color: T.text2, lineHeight: 19, marginBottom: 12 },
+  ghOpenBtn:      { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#161b22', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#30363d', marginBottom: 4, alignSelf: 'flex-start' as any },
+  ghOpenTxt:      { fontSize: 13, color: '#58a6ff', fontWeight: '600' },
+  ghEmpty:        { fontSize: 13, color: T.text3, textAlign: 'center', paddingVertical: 12 },
+  ghRepoRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, padding: 10, marginBottom: 4 },
+  ghRepoName:     { fontSize: 13, color: T.text, fontWeight: '500', flex: 1 },
+  ghCheckbox:     { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.cardAlt, alignItems: 'center', justifyContent: 'center' },
+  ghCheckboxChecked: { backgroundColor: T.accent, borderColor: T.accent },
+  ghConnectedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  ghConnectedTxt: { fontSize: 13, color: T.success, fontWeight: '600' },
+  ghDisconnectTxt:{ fontSize: 12, color: T.error, fontWeight: '600' },
   ghSectionLabel: { fontSize: 11, color: T.text2, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
-  ghInput:     { backgroundColor: T.input, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: T.text, fontSize: 14, borderWidth: 1, borderColor: T.border },
-  ghError:     { color: T.error, fontSize: 12, fontWeight: '600', marginTop: 6 },
-  ghAddBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, alignSelf: 'flex-start' as any, backgroundColor: T.cardAlt, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: T.border },
-  ghAddTxt:    { fontSize: 13, color: T.accentSoft, fontWeight: '700' },
-  ghSaveBtn:   { backgroundColor: T.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
-  ghSaveTxt:   { color: '#fff', fontWeight: '800', fontSize: 15 },
+  ghInput:        { backgroundColor: T.input, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: T.text, fontSize: 14, borderWidth: 1, borderColor: T.border, marginBottom: 4 },
+  ghError:        { color: T.error, fontSize: 12, fontWeight: '600', marginTop: 4, marginBottom: 4 },
+  ghSaveBtn:      { backgroundColor: T.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 14 },
+  ghSaveTxt:      { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

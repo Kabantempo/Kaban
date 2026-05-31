@@ -62,6 +62,7 @@ export interface AllProfiles {
   data: Record<string, AppData>;
   laboSessions?: LaboSession[];
   groupTasks?: GroupTask[];
+  githubToken?: string;
   githubRepos?: GitHubRepo[];
   githubCommits?: GitHubCommit[];
 }
