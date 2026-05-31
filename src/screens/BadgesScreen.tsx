@@ -145,6 +145,7 @@ export default function BadgesScreen({ data, all }: Props) {
 
       {viewMode === 'mine' ? (
         <FlatList
+          key="mine-2col"
           data={sorted}
           keyExtractor={b => b.id}
           numColumns={2}
