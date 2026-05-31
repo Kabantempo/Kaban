@@ -9,7 +9,7 @@ import { AllProfiles, Profile, GroupTask, TaskPriority, GitHubRepo, GitHubCommit
 import {
   addGroupTask, toggleGroupTask, deleteGroupTask, editGroupTask, addTaskComment, saveAllProfiles,
 } from '../utils/storage';
-import { fetchAllCommits, startDeviceFlow, pollDeviceFlow, fetchGitHubUser, fetchUserRepos, DeviceFlowData } from '../utils/github';
+import { fetchAllCommits, fetchAllNpmPackageNames, startDeviceFlow, pollDeviceFlow, fetchGitHubUser, fetchUserRepos, DeviceFlowData } from '../utils/github';
 import TaskModal from '../components/TaskModal';
 import { T } from '../theme';
 
@@ -352,8 +352,11 @@ export default function TasksScreen({ all, onChange }: Props) {
   async function handleRefreshCommits() {
     if (!repos.length || refreshing) return;
     setRefreshing(true);
-    const newCommits = await fetchAllCommits(repos);
-    const updated = { ...all, githubCommits: newCommits };
+    const [newCommits, npmNames] = await Promise.all([
+      fetchAllCommits(repos),
+      fetchAllNpmPackageNames(repos),
+    ]);
+    const updated = { ...all, githubCommits: newCommits, githubRepoNpmNames: { ...(all.githubRepoNpmNames ?? {}), ...npmNames } };
     onChange(updated);
     saveAllProfiles(updated);
     setRefreshing(false);
@@ -363,8 +366,8 @@ export default function TasksScreen({ all, onChange }: Props) {
     const updated = { ...all, githubToken: token, githubUser: user, githubRepos: newRepos };
     onChange(updated);
     saveAllProfiles(updated);
-    fetchAllCommits(newRepos).then(newCommits => {
-      const withCommits = { ...updated, githubCommits: newCommits };
+    Promise.all([fetchAllCommits(newRepos), fetchAllNpmPackageNames(newRepos)]).then(([newCommits, npmNames]) => {
+      const withCommits = { ...updated, githubCommits: newCommits, githubRepoNpmNames: npmNames };
       onChange(withCommits);
       saveAllProfiles(withCommits);
     });

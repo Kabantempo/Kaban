@@ -56,16 +56,33 @@ export interface GitHubCommit {
   url: string;
 }
 
+export interface SharedChallenge {
+  id: string;
+  name: string;
+  description: string;
+  xpReward: number;
+  color: string;
+  icon: string;
+  startDate: string;
+  endDate?: string;
+  createdBy: string;
+  assignedTo: string[];
+  hidden: boolean;
+  createdAt: string;
+}
+
 export interface AllProfiles {
   profiles: Profile[];
   activeId: string;
   data: Record<string, AppData>;
   laboSessions?: LaboSession[];
   groupTasks?: GroupTask[];
+  sharedChallenges?: SharedChallenge[];
   githubToken?: string;
   githubUser?: { login: string; name: string };
   githubRepos?: GitHubRepo[];
   githubCommits?: GitHubCommit[];
+  githubRepoNpmNames?: Record<string, string>;
 }
 
 export function getHabitStreak(data: AppData, habitId: string): number {

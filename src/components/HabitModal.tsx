@@ -22,28 +22,44 @@ function isoToDisplay(iso: string): string {
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
 }
-import { Habit, HABIT_ICONS, HABIT_COLORS, getTodayKey, HabitType, padTime } from '../types';
+import { Habit, HABIT_ICONS, HABIT_COLORS, getTodayKey, HabitType, padTime, Profile, SharedChallenge } from '../types';
 import { T } from '../theme';
 
 interface Props {
   visible: boolean;
   habit?: Habit;
+  sharedChallenge?: SharedChallenge;
+  profiles?: Profile[];
+  activeProfileId?: string;
   onSave: (habit: Omit<Habit, 'id' | 'createdAt'>) => void;
+  onSaveShared?: (sc: Omit<SharedChallenge, 'id' | 'createdAt'>) => void;
   onClose: () => void;
 }
 
-export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
-  const [name,           setName]           = useState('');
-  const [description,    setDescription]    = useState('');
-  const [xpReward,       setXpReward]       = useState('50');
-  const [icon,           setIcon]           = useState(HABIT_ICONS[0]);
-  const [color,          setColor]          = useState(HABIT_COLORS[0]);
-  const [type,           setType]           = useState<HabitType>('daily');
-  const [endDateRaw, setEndDateRaw] = useState('');
-  const [dateError,  setDateError]  = useState(false);
+export default function HabitModal({ visible, habit, sharedChallenge, profiles, activeProfileId, onSave, onSaveShared, onClose }: Props) {
+  const [name,        setName]        = useState('');
+  const [description, setDescription] = useState('');
+  const [xpReward,    setXpReward]    = useState('50');
+  const [icon,        setIcon]        = useState(HABIT_ICONS[0]);
+  const [color,       setColor]       = useState(HABIT_COLORS[0]);
+  const [type,        setType]        = useState<HabitType>('daily');
+  const [endDateRaw,  setEndDateRaw]  = useState('');
+  const [dateError,   setDateError]   = useState(false);
+  const [sharedWith,  setSharedWith]  = useState<string[]>([]);
+  const [hidden,      setHidden]      = useState(false);
 
   useEffect(() => {
-    if (habit) {
+    if (sharedChallenge) {
+      setName(sharedChallenge.name);
+      setDescription(sharedChallenge.description);
+      setXpReward(String(sharedChallenge.xpReward));
+      setIcon(HABIT_ICONS.includes(sharedChallenge.icon) ? sharedChallenge.icon : HABIT_ICONS[0]);
+      setColor(HABIT_COLORS.includes(sharedChallenge.color) ? sharedChallenge.color : HABIT_COLORS[0]);
+      setType('challenge');
+      setEndDateRaw(sharedChallenge.endDate ? isoToDisplay(sharedChallenge.endDate) : '');
+      setSharedWith(sharedChallenge.assignedTo.filter(id => id !== activeProfileId));
+      setHidden(sharedChallenge.hidden);
+    } else if (habit) {
       setName(habit.name);
       setDescription(habit.description);
       setXpReward(String(habit.xpReward));
@@ -51,13 +67,21 @@ export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
       setColor(HABIT_COLORS.includes(habit.color) ? habit.color : HABIT_COLORS[0]);
       setType(habit.type ?? 'daily');
       setEndDateRaw(habit.endDate ? isoToDisplay(habit.endDate) : '');
+      setSharedWith([]); setHidden(false);
     } else {
       setName(''); setDescription(''); setXpReward('50');
       setIcon(HABIT_ICONS[0]); setColor(HABIT_COLORS[0]);
       setType('daily'); setEndDateRaw('');
+      setSharedWith([]); setHidden(false);
     }
     setDateError(false);
-  }, [habit, visible]);
+  }, [habit, sharedChallenge, visible]);
+
+  function toggleSharedWith(profileId: string) {
+    setSharedWith(prev =>
+      prev.includes(profileId) ? prev.filter(id => id !== profileId) : [...prev, profileId]
+    );
+  }
 
   function handleSave() {
     if (!name.trim()) return;
@@ -66,15 +90,36 @@ export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
       endDate = parseDisplayDate(endDateRaw);
       if (!endDate) { setDateError(true); return; }
     }
-    onSave({
-      name: name.trim(),
-      description: description.trim(),
-      xpReward: Math.max(1, parseInt(xpReward) || 50),
-      color, icon, type,
-      startDate: type === 'challenge' ? getTodayKey() : undefined,
-      endDate,
-    });
+
+    const assignedTo = activeProfileId
+      ? [activeProfileId, ...sharedWith]
+      : sharedWith;
+
+    if (type === 'challenge' && sharedWith.length > 0 && onSaveShared) {
+      onSaveShared({
+        name: name.trim(),
+        description: description.trim(),
+        xpReward: Math.max(1, parseInt(xpReward) || 50),
+        color, icon,
+        startDate: getTodayKey(),
+        endDate,
+        createdBy: activeProfileId ?? '',
+        assignedTo,
+        hidden,
+      });
+    } else {
+      onSave({
+        name: name.trim(),
+        description: description.trim(),
+        xpReward: Math.max(1, parseInt(xpReward) || 50),
+        color, icon, type,
+        startDate: type === 'challenge' ? getTodayKey() : undefined,
+        endDate,
+      });
+    }
   }
+
+  const otherProfiles = (profiles ?? []).filter(p => p.id !== activeProfileId);
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -184,6 +229,43 @@ export default function HabitModal({ visible, habit, onSave, onClose }: Props) {
                   />
                 </View>
                 {dateError && <Text style={styles.dateError}>Format attendu : JJ/MM/AAAA</Text>}
+
+                {/* Partager avec */}
+                {otherProfiles.length > 0 && (
+                  <>
+                    <Text style={styles.label}>Partager avec</Text>
+                    <View style={styles.profileRow}>
+                      {otherProfiles.map(p => {
+                        const checked = sharedWith.includes(p.id);
+                        const pColor = /^#[0-9A-Fa-f]{6}$/.test(p.emoji) ? p.emoji : T.accent;
+                        return (
+                          <TouchableOpacity
+                            key={p.id}
+                            style={[styles.profileChip, checked && { borderColor: pColor, backgroundColor: pColor + '22' }]}
+                            onPress={() => toggleSharedWith(p.id)}
+                          >
+                            <View style={[styles.profileChipAvatar, { backgroundColor: pColor }]}>
+                              <Text style={styles.profileChipInitial}>{p.name.charAt(0).toUpperCase()}</Text>
+                            </View>
+                            <Text style={[styles.profileChipName, checked && { color: T.text }]}>{p.name}</Text>
+                            {checked && <Ionicons name="checkmark-circle" size={14} color={pColor} />}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
+
+                {/* Masquer dans calendrier */}
+                {(sharedWith.length > 0 || sharedChallenge) && (
+                  <TouchableOpacity style={styles.hiddenRow} onPress={() => setHidden(v => !v)}>
+                    <View style={[styles.hiddenToggle, hidden && styles.hiddenToggleOn]}>
+                      {hidden && <Ionicons name="checkmark" size={12} color="#fff" />}
+                    </View>
+                    <Ionicons name={hidden ? 'eye-off-outline' : 'eye-outline'} size={16} color={T.text2} />
+                    <Text style={styles.hiddenLabel}>Masquer dans le calendrier et l'équipe</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
 
@@ -250,6 +332,15 @@ const styles = StyleSheet.create({
   },
   dateInput: { flex: 1, paddingVertical: 13, color: T.text, fontSize: 15 },
   dateError: { fontSize: 11, color: T.error, fontWeight: '600', marginTop: 4 },
+  profileRow:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  profileChip:       { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 20, borderWidth: 1.5, borderColor: T.border, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: T.cardAlt },
+  profileChipAvatar: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  profileChipInitial:{ fontSize: 10, fontWeight: '800', color: '#fff' },
+  profileChipName:   { fontSize: 13, color: T.text2, fontWeight: '600' },
+  hiddenRow:         { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, backgroundColor: T.cardAlt, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.border },
+  hiddenToggle:      { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.input, alignItems: 'center', justifyContent: 'center' },
+  hiddenToggleOn:    { backgroundColor: T.accent, borderColor: T.accent },
+  hiddenLabel:       { fontSize: 13, color: T.text2, flex: 1 },
   btnRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   cancelBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 14,

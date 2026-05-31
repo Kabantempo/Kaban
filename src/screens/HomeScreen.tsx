@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import XPHeader from '../components/XPHeader';
 import HabitCard from '../components/HabitCard';
 import HabitModal from '../components/HabitModal';
-import { AppData, Habit, Profile, getTodayKey } from '../types';
-import { getEntryForHabit, setHabitStatus, autoCompleteChallengesToday, saveAllProfiles } from '../utils/storage';
+import { AppData, Habit, Profile, SharedChallenge, getTodayKey } from '../types';
+import { getEntryForHabit, setHabitStatus, autoCompleteChallengesToday, saveAllProfiles, addSharedChallenge, toggleSharedChallengeHidden, deleteSharedChallenge } from '../utils/storage';
 import TeamOverview from '../components/TeamOverview';
 import { T } from '../theme';
 
@@ -21,8 +21,9 @@ export default function HomeScreen({ onDataChange, profileData, profile, onProfi
   const [data, setData] = useState<AppData>(
     profileData ?? { habits: [], entries: [], totalXP: 0, earnedBadges: [] }
   );
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editingHabit, setEditingHabit] = useState<Habit | undefined>();
+  const [modalVisible,        setModalVisible]        = useState(false);
+  const [editingHabit,        setEditingHabit]        = useState<Habit | undefined>();
+  const [editingShared,       setEditingShared]       = useState<SharedChallenge | undefined>();
 
   useEffect(() => {
     if (profileData) {
@@ -75,6 +76,52 @@ export default function HomeScreen({ onDataChange, profileData, profile, onProfi
       },
     ]);
   }
+
+  function handleSaveShared(sc: Omit<SharedChallenge, 'id' | 'createdAt'>) {
+    if (!all) return;
+    let updated;
+    if (editingShared) {
+      updated = {
+        ...all,
+        sharedChallenges: (all.sharedChallenges ?? []).map(s =>
+          s.id === editingShared.id ? { ...s, ...sc } : s
+        ),
+      };
+    } else {
+      updated = addSharedChallenge(all, sc);
+    }
+    saveAllProfiles(updated);
+    // Notify parent via a dummy data change to trigger re-render
+    onDataChange?.(data);
+    setModalVisible(false);
+    setEditingShared(undefined);
+  }
+
+  function handleDeleteShared(sc: SharedChallenge) {
+    if (!all) return;
+    Alert.alert('Supprimer le défi partagé', `Supprimer "${sc.name}" pour tout le monde ?`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer', style: 'destructive',
+        onPress: () => {
+          const updated = deleteSharedChallenge(all, sc.id);
+          saveAllProfiles(updated);
+          onDataChange?.(data);
+        },
+      },
+    ]);
+  }
+
+  function handleToggleHidden(sc: SharedChallenge) {
+    if (!all) return;
+    const updated = toggleSharedChallengeHidden(all, sc.id);
+    saveAllProfiles(updated);
+    onDataChange?.(data);
+  }
+
+  const mySharedChallenges = (all?.sharedChallenges ?? []).filter(sc =>
+    sc.assignedTo.includes(profile?.id ?? '') || sc.createdBy === profile?.id
+  );
 
   const renderItem = useCallback(({ item }: { item: Habit }) => (
     <HabitCard
@@ -142,7 +189,75 @@ export default function HomeScreen({ onDataChange, profileData, profile, onProfi
             <Text style={styles.emptyDesc}>Ajoute ta première habitude pour commencer à gagner de l'XP !</Text>
           </View>
         }
-        ListFooterComponent={<View style={{ height: 160 }} />}
+        ListFooterComponent={
+          <>
+            {mySharedChallenges.length > 0 && (
+              <View style={styles.sharedSection}>
+                <Text style={styles.sharedTitle}>
+                  <Ionicons name="people-outline" size={12} color={T.text2} /> Défis partagés
+                </Text>
+                {mySharedChallenges.map(sc => {
+                  const scColor = sc.color;
+                  const today2 = getTodayKey();
+                  const start = sc.startDate;
+                  const end = sc.endDate ?? today2;
+                  const totalDays = Math.max(1, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1);
+                  const doneDays = data.entries.filter(e => e.habitId === sc.id && e.status === 'yes' && e.date >= start && e.date <= end).length;
+                  const pct = doneDays / totalDays;
+                  const isCreator = sc.createdBy === profile?.id;
+                  return (
+                    <View key={sc.id} style={[styles.sharedCard, { borderLeftColor: scColor }]}>
+                      <View style={styles.sharedCardTop}>
+                        <View style={[styles.sharedIcon, { backgroundColor: scColor + '22' }]}>
+                          <Ionicons name={sc.icon as any} size={16} color={scColor} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sharedName}>{sc.name}</Text>
+                          {sc.description ? <Text style={styles.sharedDesc} numberOfLines={1}>{sc.description}</Text> : null}
+                        </View>
+                        <View style={styles.sharedActions}>
+                          {isCreator && (
+                            <TouchableOpacity onPress={() => handleToggleHidden(sc)} style={styles.sharedActionBtn}>
+                              <Ionicons name={sc.hidden ? 'eye-off-outline' : 'eye-outline'} size={14} color={T.text3} />
+                            </TouchableOpacity>
+                          )}
+                          {isCreator && (
+                            <TouchableOpacity onPress={() => { setEditingShared(sc); setEditingHabit(undefined); setModalVisible(true); }} style={styles.sharedActionBtn}>
+                              <Ionicons name="pencil-outline" size={14} color={T.text3} />
+                            </TouchableOpacity>
+                          )}
+                          {isCreator && (
+                            <TouchableOpacity onPress={() => handleDeleteShared(sc)} style={styles.sharedActionBtn}>
+                              <Ionicons name="trash-outline" size={14} color={T.error} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.sharedProgressTrack}>
+                        <View style={[styles.sharedProgressFill, { width: `${Math.round(pct * 100)}%` as any, backgroundColor: scColor }]} />
+                      </View>
+                      <View style={styles.sharedFooter}>
+                        <Text style={styles.sharedProgress}>{doneDays}/{totalDays} j</Text>
+                        {sc.hidden && <View style={styles.sharedHiddenBadge}><Ionicons name="eye-off-outline" size={9} color={T.text3} /><Text style={styles.sharedHiddenTxt}>Masqué</Text></View>}
+                        <View style={styles.sharedParticipants}>
+                          {(all?.profiles ?? []).filter(p => sc.assignedTo.includes(p.id)).slice(0, 4).map((p, i) => {
+                            const pColor = /^#[0-9A-Fa-f]{6}$/.test(p.emoji) ? p.emoji : T.accent;
+                            return (
+                              <View key={p.id} style={[styles.sharedAvatar, { backgroundColor: pColor, marginLeft: i === 0 ? 0 : -6 }]}>
+                                <Text style={styles.sharedAvatarLetter}>{p.name.charAt(0).toUpperCase()}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            <View style={{ height: 160 }} />
+          </>
+        }
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />

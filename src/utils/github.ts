@@ -109,3 +109,29 @@ export async function fetchAllCommits(repos: GitHubRepo[]): Promise<GitHubCommit
   all.sort((a, b) => b.date.localeCompare(a.date));
   return all;
 }
+
+export async function fetchNpmPackageName(repo: GitHubRepo): Promise<string | null> {
+  try {
+    const headers: Record<string, string> = { Accept: 'application/vnd.github.v3.raw' };
+    if (repo.token) headers['Authorization'] = `token ${repo.token}`;
+    const res = await fetch(
+      `https://api.github.com/repos/${repo.owner}/${repo.repo}/contents/package.json`,
+      { headers }
+    );
+    if (!res.ok) return null;
+    const pkg = JSON.parse(await res.text());
+    return typeof pkg.name === 'string' ? pkg.name : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAllNpmPackageNames(repos: GitHubRepo[]): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    repos.map(async repo => {
+      const name = await fetchNpmPackageName(repo);
+      return name ? [`${repo.owner}/${repo.repo}`, name] as [string, string] : null;
+    })
+  );
+  return Object.fromEntries(entries.filter((e): e is [string, string] => e !== null));
+}

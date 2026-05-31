@@ -249,6 +249,31 @@ export function editGroupTask(
   };
 }
 
+export function addSharedChallenge(
+  all: AllProfiles,
+  challenge: Omit<SharedChallenge, 'id' | 'createdAt'>,
+): AllProfiles {
+  const sc: SharedChallenge = {
+    ...challenge,
+    id: `sc_${Date.now()}`,
+    createdAt: getTodayKey(),
+  };
+  return { ...all, sharedChallenges: [...(all.sharedChallenges ?? []), sc] };
+}
+
+export function toggleSharedChallengeHidden(all: AllProfiles, id: string): AllProfiles {
+  return {
+    ...all,
+    sharedChallenges: (all.sharedChallenges ?? []).map(sc =>
+      sc.id === id ? { ...sc, hidden: !sc.hidden } : sc
+    ),
+  };
+}
+
+export function deleteSharedChallenge(all: AllProfiles, id: string): AllProfiles {
+  return { ...all, sharedChallenges: (all.sharedChallenges ?? []).filter(sc => sc.id !== id) };
+}
+
 export async function resetAllData(): Promise<void> {
   await AsyncStorage.multiRemove([PROFILES_KEY, LEGACY_KEY]);
   try {

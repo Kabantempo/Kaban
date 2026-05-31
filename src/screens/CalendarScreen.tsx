@@ -383,12 +383,16 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                 .map(([date, dayCommits]) => (
                   <View key={date} style={styles.commitGroup}>
                     <Text style={styles.commitGroupDate}>{date}</Text>
-                    {dayCommits.map(c => (
-                      <View key={`${c.repo}-${c.sha}`} style={styles.commitLegendRow}>
-                        <Text style={styles.commitLegendSha}>{c.sha}</Text>
-                        <Text style={styles.commitLegendMsg} numberOfLines={1}>{c.message}</Text>
-                      </View>
-                    ))}
+                    {dayCommits.map(c => {
+                      const npmName = all.githubRepoNpmNames?.[c.repo];
+                      return (
+                        <View key={`${c.repo}-${c.sha}`} style={styles.commitLegendRow}>
+                          <Text style={styles.commitLegendSha}>{c.sha}</Text>
+                          {npmName && <Text style={styles.commitLegendNpm}>{npmName}</Text>}
+                          <Text style={styles.commitLegendMsg} numberOfLines={1}>{c.message}</Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 ))
               }
@@ -451,7 +455,8 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                         <Ionicons name="logo-github" size={11} color="#8b949e" /> Commits · {dayCommits.length}
                       </Text>
                       {dayCommits.map(c => {
-                        const repoShort = c.repo.split('/')[1] ?? c.repo;
+                        const npmName = all.githubRepoNpmNames?.[c.repo];
+                        const repoLabel = npmName ?? c.repo.split('/')[1] ?? c.repo;
                         return (
                           <View key={`${c.repo}-${c.sha}`} style={styles.daySheetCommit}>
                             <View style={styles.daySheetCommitLeft}>
@@ -459,8 +464,8 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                                 <Text style={styles.daySheetCommitSha}>{c.sha}</Text>
                               </View>
                               <View style={styles.daySheetRepoBadge}>
-                                <Ionicons name="git-branch-outline" size={9} color="#8b949e" />
-                                <Text style={styles.daySheetRepoName}>{repoShort}</Text>
+                                <Ionicons name={npmName ? 'logo-npm' : 'git-branch-outline'} size={9} color={npmName ? '#CB3837' : '#8b949e'} />
+                                <Text style={[styles.daySheetRepoName, npmName && { color: '#CB3837' }]}>{repoLabel}</Text>
                               </View>
                             </View>
                             <View style={{ flex: 1 }}>
@@ -723,5 +728,6 @@ const styles = StyleSheet.create({
   commitGroupDate:    { fontSize: 10, color: T.text2, fontWeight: '700', marginBottom: 4 },
   commitLegendRow:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
   commitLegendSha:    { fontSize: 9, color: '#58a6ff', fontWeight: '700', backgroundColor: '#161b22', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
+  commitLegendNpm:    { fontSize: 9, color: '#CB3837', fontWeight: '700', backgroundColor: '#CB383711', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
   commitLegendMsg:    { fontSize: 10, color: T.text2, flex: 1 },
 });
