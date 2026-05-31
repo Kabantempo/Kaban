@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  SafeAreaView, StatusBar, Dimensions, ScrollView,
+  SafeAreaView, StatusBar, Dimensions, ScrollView, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AllProfiles, Profile, HABIT_COLORS } from '../types';
-import { createProfile, renameProfile, hashPassword, saveAllProfiles } from '../utils/storage';
+import { createProfile, deleteProfile, renameProfile, hashPassword, saveAllProfiles } from '../utils/storage';
 import { T } from '../theme';
 
 const { width } = Dimensions.get('window');
@@ -59,7 +59,7 @@ function AddCard({ onPress }: { onPress: () => void }) {
 }
 
 // ── Formulaire créer / modifier ───────────────────────────────────────────────
-function ProfileForm({ title, initialName, initialColor, initialHasPassword, takenColors, onSave, onCancel, onRemovePassword }: {
+function ProfileForm({ title, initialName, initialColor, initialHasPassword, takenColors, onSave, onCancel, onRemovePassword, onDelete }: {
   title: string;
   initialName?: string;
   initialColor?: string;
@@ -68,6 +68,7 @@ function ProfileForm({ title, initialName, initialColor, initialHasPassword, tak
   onSave: (name: string, color: string, newPassword?: string) => void;
   onCancel: () => void;
   onRemovePassword?: () => void;
+  onDelete?: () => void;
 }) {
   const firstFree  = AVATAR_COLORS.find(c => !takenColors.includes(c)) ?? AVATAR_COLORS[0];
   const [name,     setName]     = useState(initialName ?? '');
@@ -154,6 +155,13 @@ function ProfileForm({ title, initialName, initialColor, initialHasPassword, tak
 
       {!!error && <Text style={styles.errorText}>{error}</Text>}
 
+      {onDelete && (
+        <TouchableOpacity style={styles.deleteProfileBtn} onPress={onDelete}>
+          <Ionicons name="trash-outline" size={14} color={T.error} />
+          <Text style={styles.deleteProfileBtnText}>Supprimer ce profil</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity
         style={[styles.saveBtn, !name.trim() && styles.saveBtnDisabled]}
         onPress={handleSave}
@@ -223,9 +231,10 @@ interface Props {
   all: AllProfiles;
   onChange: (all: AllProfiles) => void;
   onSelect: (profileId: string) => void;
+  onReset?: () => void;
 }
 
-export default function ProfilePickerScreen({ all, onChange, onSelect }: Props) {
+export default function ProfilePickerScreen({ all, onChange, onSelect, onReset }: Props) {
   const [mode,      setMode]      = useState<Mode>('grid');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [unlockId,  setUnlockId]  = useState<string | null>(null);
@@ -277,6 +286,38 @@ export default function ProfilePickerScreen({ all, onChange, onSelect }: Props) 
     setMode('grid');
   }
 
+  function handleDelete() {
+    if (!editingId) return;
+    Alert.alert(
+      'Supprimer ce profil',
+      'Toutes les données de ce profil seront perdues.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer', style: 'destructive',
+          onPress: () => {
+            const updated = deleteProfile(all, editingId);
+            onChange(updated);
+            saveAllProfiles(updated);
+            setMode('grid');
+            setEditingId(null);
+          },
+        },
+      ]
+    );
+  }
+
+  function handleResetPress() {
+    Alert.alert(
+      'Réinitialiser l\'app',
+      'Tous les profils et données seront supprimés. Cette action est irréversible.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Réinitialiser', style: 'destructive', onPress: onReset },
+      ]
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor="#09090F" />
@@ -301,6 +342,12 @@ export default function ProfilePickerScreen({ all, onChange, onSelect }: Props) 
                 <AddCard onPress={() => setMode('new')} />
               )}
             </View>
+            {onReset && (
+              <TouchableOpacity style={styles.resetBtn} onPress={handleResetPress}>
+                <Ionicons name="refresh-outline" size={12} color={T.text3} />
+                <Text style={styles.resetBtnText}>Réinitialiser l'app</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         )}
 
@@ -323,6 +370,7 @@ export default function ProfilePickerScreen({ all, onChange, onSelect }: Props) 
             onSave={handleEdit}
             onCancel={() => setMode('grid')}
             onRemovePassword={handleRemovePassword}
+            onDelete={all.profiles.length > 1 ? handleDelete : undefined}
           />
         )}
 
@@ -390,6 +438,10 @@ const styles = StyleSheet.create({
   eyeBtn:     { padding: 8 },
   removePwdBtn:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
   removePwdText: { fontSize: 13, color: T.error, fontWeight: '600' },
+  deleteProfileBtn:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16, justifyContent: 'center' },
+  deleteProfileBtnText: { fontSize: 13, color: T.error, fontWeight: '600' },
+  resetBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 32, paddingBottom: 16 },
+  resetBtnText:  { fontSize: 12, color: T.text3, fontWeight: '500' },
   errorText:  { color: T.error, fontSize: 12, fontWeight: '600', marginTop: 8, textAlign: 'center' },
   saveBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.accent, borderRadius: 14, paddingVertical: 15, marginTop: 24 },
   saveBtnDisabled: { backgroundColor: T.cardAlt },

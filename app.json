@@ -3,6 +3,12 @@
     "name": "Kaban",
     "slug": "kaban",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c19174da-7757-4d79-a88f-567bca504f8b"
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -22,7 +28,15 @@
     },
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-notifications"
-    ]
+      "expo-notifications",
+      "expo-font",
+      "expo-updates"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c19174da-7757-4d79-a88f-567bca504f8b"
+      }
+    },
+    "owner": "kaban13"
   }
 }

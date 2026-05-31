@@ -46,7 +46,7 @@ function getBarColor(percent: number): [string, string] {
   return [T.accent, T.accentSoft];
 }
 
-type FilterKey = 'habits' | 'defis' | 'tasks';
+type FilterKey = 'habits' | 'defis' | 'tasks' | 'commits';
 
 interface Props {
   data: AppData;
@@ -58,7 +58,7 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
   const today = new Date();
   const [year,    setYear]    = useState(today.getFullYear());
   const [month,   setMonth]   = useState(today.getMonth());
-  const [filters,      setFilters]      = useState<Set<FilterKey>>(new Set(['habits', 'defis', 'tasks']));
+  const [filters,      setFilters]      = useState<Set<FilterKey>>(new Set(['habits', 'defis', 'tasks', 'commits']));
   const [selectedTask, setSelectedTask] = useState<GroupTask | null>(null);
   const todayStr = getTodayKey();
 
@@ -95,6 +95,20 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
     return map;
   }, [tasks]);
 
+  // Commits GitHub par date
+  const commits = all.githubCommits ?? [];
+  const commitsThisMonth = useMemo(() => {
+    const prefix = `${year}-${pad(month + 1)}`;
+    const map: Record<string, typeof commits> = {};
+    for (const c of commits) {
+      if (c.date.startsWith(prefix)) {
+        if (!map[c.date]) map[c.date] = [];
+        map[c.date].push(c);
+      }
+    }
+    return map;
+  }, [commits, year, month]);
+
   // Stats du mois
   let perfectDays = 0;
   for (let d = 1; d <= daysInMonth; d++) {
@@ -115,9 +129,10 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const FILTER_PILLS: { id: FilterKey; label: string; icon: string; color: string }[] = [
-    { id: 'habits', label: 'Habitudes', icon: 'checkmark-circle-outline', color: T.accent },
-    { id: 'defis',  label: 'Défis',     icon: 'flag-outline',             color: '#F59E0B' },
-    { id: 'tasks',  label: 'Tâches',    icon: 'checkbox-outline',         color: '#3B82F6' },
+    { id: 'habits',  label: 'Habitudes', icon: 'checkmark-circle-outline', color: T.accent },
+    { id: 'defis',   label: 'Défis',     icon: 'flag-outline',             color: '#F59E0B' },
+    { id: 'tasks',   label: 'Tâches',    icon: 'checkbox-outline',         color: '#3B82F6' },
+    { id: 'commits', label: 'GitHub',    icon: 'git-commit-outline',       color: '#8b949e' },
   ];
 
   function handleToggleTask(task: GroupTask) {
@@ -222,6 +237,10 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                   const dayTasks = filters.has('tasks') ? (tasksThisMonth[date] ?? []) : [];
                   const hasTasks = dayTasks.length > 0;
 
+                  // Commits ce jour
+                  const dayCommits = filters.has('commits') ? (commitsThisMonth[date] ?? []) : [];
+                  const hasCommits = dayCommits.length > 0;
+
                   const pctInt = Math.round(percent * 100);
                   const barColor = percent === 1
                     ? T.accent
@@ -256,6 +275,14 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                             </TouchableOpacity>
                           );
                         })}
+
+                        {/* Point commit GitHub */}
+                        {hasCommits && (
+                          <View style={styles.commitDotRow}>
+                            <View style={styles.commitDot} />
+                            {dayCommits.length > 1 && <Text style={styles.commitDotCount}>{dayCommits.length}</Text>}
+                          </View>
+                        )}
 
                         {/* Barre de progression habitudes */}
                         {filters.has('habits') && !isFuture && dailyHabits.length > 0 && (
@@ -341,6 +368,25 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                 <View style={[styles.legendDot, { backgroundColor: T.success }]} />
                 <Text style={styles.legendLabel}>Tâche terminée</Text>
               </View>
+            </>
+          )}
+          {filters.has('commits') && Object.keys(commitsThisMonth).length > 0 && (
+            <>
+              <Text style={[styles.legendTitle, { marginTop: 12 }]}>Commits GitHub ce mois</Text>
+              {Object.entries(commitsThisMonth)
+                .sort(([a], [b]) => b.localeCompare(a))
+                .map(([date, dayCommits]) => (
+                  <View key={date} style={styles.commitGroup}>
+                    <Text style={styles.commitGroupDate}>{date}</Text>
+                    {dayCommits.map(c => (
+                      <View key={`${c.repo}-${c.sha}`} style={styles.commitLegendRow}>
+                        <Text style={styles.commitLegendSha}>{c.sha}</Text>
+                        <Text style={styles.commitLegendMsg} numberOfLines={1}>{c.message}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))
+              }
             </>
           )}
         </View>
@@ -525,4 +571,14 @@ const styles = StyleSheet.create({
   legendItem:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot:   { width: 9, height: 9, borderRadius: 4.5 },
   legendLabel: { fontSize: 10, color: T.text2 },
+
+  commitDotRow:   { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1.5 },
+  commitDot:      { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#8b949e' },
+  commitDotCount: { fontSize: 6, color: '#8b949e', fontWeight: '700' },
+
+  commitGroup:        { marginBottom: 10 },
+  commitGroupDate:    { fontSize: 10, color: T.text2, fontWeight: '700', marginBottom: 4 },
+  commitLegendRow:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  commitLegendSha:    { fontSize: 9, color: '#58a6ff', fontWeight: '700', backgroundColor: '#161b22', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
+  commitLegendMsg:    { fontSize: 10, color: T.text2, flex: 1 },
 });

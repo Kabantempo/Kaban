@@ -10,8 +10,9 @@ import ProfilePickerScreen from './src/screens/ProfilePickerScreen';
 import TabBar, { TabName } from './src/components/TabBar';
 import { AllProfiles, AppData, checkBadges } from './src/types';
 import {
-  loadAllProfiles, saveAllProfiles, getActiveData, setActiveData, loadFromSupabase,
+  loadAllProfiles, saveAllProfiles, getActiveData, setActiveData, loadFromSupabase, resetAllData,
 } from './src/utils/storage';
+import { fetchAllCommits } from './src/utils/github';
 
 const POLL_INTERVAL = 30000;
 
@@ -26,8 +27,16 @@ export default function App() {
     loadAllProfiles().then(loaded => {
       setAll(loaded);
       if (loaded.profiles.length === 1 && !loaded.profiles[0].password) {
-        // 1 seul profil sans mdp → sélection auto
         setShowPicker(false);
+      }
+      if (loaded.githubRepos?.length) {
+        fetchAllCommits(loaded.githubRepos).then(commits => {
+          setAll(prev => {
+            const updated = { ...prev, githubCommits: commits };
+            saveAllProfiles(updated);
+            return updated;
+          });
+        });
       }
     });
   }, []);
@@ -68,10 +77,19 @@ export default function App() {
   }
 
   function handleSelectProfile(profileId: string) {
-    const newAll = { ...all, activeId: profileId };
-    setAll(newAll);
-    saveAllProfiles(newAll);
+    setAll(prev => {
+      const newAll = { ...prev, activeId: profileId };
+      saveAllProfiles(newAll);
+      return newAll;
+    });
     setShowPicker(false);
+  }
+
+  async function handleReset() {
+    await resetAllData();
+    const fresh = await loadAllProfiles();
+    setAll(fresh);
+    setShowPicker(true);
   }
 
   // Écran Netflix si pas encore de profil sélectionné
@@ -81,6 +99,7 @@ export default function App() {
         all={all}
         onChange={newAll => { setAll(newAll); saveAllProfiles(newAll); }}
         onSelect={handleSelectProfile}
+        onReset={handleReset}
       />
     );
   }

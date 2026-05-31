@@ -249,6 +249,14 @@ export function editGroupTask(
   };
 }
 
+export async function resetAllData(): Promise<void> {
+  await AsyncStorage.multiRemove([PROFILES_KEY, LEGACY_KEY]);
+  try {
+    const teamId = getTeamId();
+    await supabase.from('kaban_data').delete().eq('device_id', teamId);
+  } catch {}
+}
+
 // Legacy - gardé pour compatibilité
 export async function loadData(): Promise<AppData> {
   const all = await loadAllProfiles();

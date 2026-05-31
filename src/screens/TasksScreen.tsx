@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  StatusBar, Alert, Pressable,
+  StatusBar, Alert, Pressable, Modal, TextInput, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { AllProfiles, Profile, GroupTask, TaskPriority, HABIT_COLORS, getTodayKey } from '../types';
+import { AllProfiles, Profile, GroupTask, TaskPriority, GitHubRepo, GitHubCommit, HABIT_COLORS, getTodayKey } from '../types';
 import {
   addGroupTask, toggleGroupTask, deleteGroupTask, editGroupTask, addTaskComment, saveAllProfiles,
 } from '../utils/storage';
+import { fetchAllCommits } from '../utils/github';
 import TaskModal from '../components/TaskModal';
 import { T } from '../theme';
 
 const AVATAR_COLORS = HABIT_COLORS;
 function avatarColor(p: Profile) { return /^#[0-9A-Fa-f]{6}$/.test(p.emoji) ? p.emoji : AVATAR_COLORS[0]; }
 
-type Filter = 'mine' | 'byMe' | 'all';
+type Filter = 'mine' | 'byMe' | 'all' | 'github';
 
 function isOverdue(deadline?: string): boolean {
   if (!deadline) return false;
@@ -26,6 +27,133 @@ function formatDeadline(iso?: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
+}
+
+function CommitCard({ commit }: { commit: GitHubCommit }) {
+  const [, repo] = commit.repo.split('/');
+  return (
+    <View style={styles.commitCard}>
+      <View style={styles.commitIconWrap}>
+        <Ionicons name="git-commit-outline" size={16} color="#8b949e" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.commitMessage} numberOfLines={2}>{commit.message}</Text>
+        <View style={styles.commitMeta}>
+          <View style={styles.commitShaBadge}>
+            <Text style={styles.commitSha}>{commit.sha}</Text>
+          </View>
+          <Text style={styles.commitRepo}>{commit.repo}</Text>
+        </View>
+        <View style={styles.commitFooter}>
+          <Ionicons name="person-outline" size={10} color={T.text3} />
+          <Text style={styles.commitAuthor}>{commit.author}</Text>
+          <Text style={styles.commitDot}>·</Text>
+          <Text style={styles.commitDate}>{commit.date}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function GitHubModal({ repos, onSave, onClose, onRefresh }: {
+  repos: GitHubRepo[];
+  onSave: (repos: GitHubRepo[]) => void;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [list,     setList]     = useState<GitHubRepo[]>(repos);
+  const [repoInput, setRepoInput] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
+  const [error,    setError]    = useState('');
+
+  function handleAdd() {
+    const trimmed = repoInput.trim().replace(/^https?:\/\/github\.com\//, '');
+    const parts = trimmed.split('/');
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      setError('Format attendu : proprietaire/repo');
+      return;
+    }
+    const newRepo: GitHubRepo = { owner: parts[0], repo: parts[1] };
+    if (tokenInput.trim()) newRepo.token = tokenInput.trim();
+    setList(prev => [...prev, newRepo]);
+    setRepoInput('');
+    setTokenInput('');
+    setError('');
+  }
+
+  function handleRemove(idx: number) {
+    setList(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function handleSave() {
+    onSave(list);
+    onClose();
+  }
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.ghBackdrop} onPress={onClose} />
+      <View style={styles.ghSheet}>
+        <View style={styles.ghHandle} />
+        <View style={styles.ghTitleRow}>
+          <Ionicons name="logo-github" size={20} color={T.text} />
+          <Text style={styles.ghTitle}>Repos GitHub</Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.ghRefreshBtn}>
+            <Ionicons name="refresh-outline" size={16} color={T.accentSoft} />
+            <Text style={styles.ghRefreshTxt}>Actualiser</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+          {list.length === 0 && (
+            <Text style={styles.ghEmpty}>Aucun repo configuré.</Text>
+          )}
+          {list.map((r, i) => (
+            <View key={i} style={styles.ghRepoRow}>
+              <Ionicons name="git-branch-outline" size={14} color={T.text3} />
+              <Text style={styles.ghRepoName}>{r.owner}/{r.repo}</Text>
+              {r.token && <Ionicons name="lock-closed" size={10} color={T.text3} />}
+              <TouchableOpacity onPress={() => handleRemove(i)} style={{ marginLeft: 'auto' as any }}>
+                <Ionicons name="trash-outline" size={14} color={T.error} />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+
+        <Text style={styles.ghSectionLabel}>Ajouter un repo</Text>
+        <TextInput
+          style={styles.ghInput}
+          value={repoInput}
+          onChangeText={t => { setRepoInput(t); setError(''); }}
+          placeholder="proprietaire/repo  ou  lien GitHub"
+          placeholderTextColor={T.text3}
+          selectionColor={T.accent}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TextInput
+          style={[styles.ghInput, { marginTop: 8 }]}
+          value={tokenInput}
+          onChangeText={setTokenInput}
+          placeholder="Token GitHub (optionnel, pour repos privés)"
+          placeholderTextColor={T.text3}
+          selectionColor={T.accent}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+        {!!error && <Text style={styles.ghError}>{error}</Text>}
+        <TouchableOpacity style={styles.ghAddBtn} onPress={handleAdd}>
+          <Ionicons name="add" size={16} color={T.accentSoft} />
+          <Text style={styles.ghAddTxt}>Ajouter</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.ghSaveBtn} onPress={handleSave}>
+          <Text style={styles.ghSaveTxt}>Enregistrer</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
 }
 
 interface Props { all: AllProfiles; onChange: (all: AllProfiles) => void }
@@ -141,9 +269,13 @@ export default function TasksScreen({ all, onChange }: Props) {
   const [filter,      setFilter]      = useState<Filter>('mine');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTask,  setEditingTask]  = useState<GroupTask | undefined>();
+  const [ghModalVisible, setGhModalVisible] = useState(false);
+  const [refreshing,     setRefreshing]     = useState(false);
 
   const activeId = all.activeId;
   const tasks    = all.groupTasks ?? [];
+  const commits  = all.githubCommits ?? [];
+  const repos    = all.githubRepos ?? [];
 
   const filtered = tasks.filter(t => {
     const ids = Array.isArray(t.assignedTo) ? t.assignedTo : [t.assignedTo];
@@ -162,6 +294,29 @@ export default function TasksScreen({ all, onChange }: Props) {
     return a.deadline.localeCompare(b.deadline);
   });
   const done = filtered.filter(t => t.status === 'done');
+
+  async function handleRefreshCommits() {
+    if (!repos.length || refreshing) return;
+    setRefreshing(true);
+    const newCommits = await fetchAllCommits(repos);
+    const updated = { ...all, githubCommits: newCommits };
+    onChange(updated);
+    saveAllProfiles(updated);
+    setRefreshing(false);
+  }
+
+  function handleSaveRepos(newRepos: GitHubRepo[]) {
+    const updated = { ...all, githubRepos: newRepos };
+    onChange(updated);
+    saveAllProfiles(updated);
+    if (newRepos.length) {
+      fetchAllCommits(newRepos).then(newCommits => {
+        const withCommits = { ...updated, githubCommits: newCommits };
+        onChange(withCommits);
+        saveAllProfiles(withCommits);
+      });
+    }
+  }
 
   function handleSave(title: string, desc: string, assignedTo: string[], deadline?: string, priority?: TaskPriority) {
     let updated: AllProfiles;
@@ -190,9 +345,10 @@ export default function TasksScreen({ all, onChange }: Props) {
   }
 
   const FILTERS: { id: Filter; label: string }[] = [
-    { id: 'mine',  label: 'Mes tâches' },
-    { id: 'byMe',  label: 'Par moi' },
-    { id: 'all',   label: 'Toutes' },
+    { id: 'mine',   label: 'Mes tâches' },
+    { id: 'byMe',   label: 'Par moi' },
+    { id: 'all',    label: 'Toutes' },
+    { id: 'github', label: 'GitHub' },
   ];
 
   return (
@@ -200,7 +356,13 @@ export default function TasksScreen({ all, onChange }: Props) {
       <StatusBar barStyle="light-content" backgroundColor={T.bg} />
 
       <LinearGradient colors={['#0C1F0E', '#0F1810', T.bg]} style={styles.header}>
-        <Text style={styles.title}>Tâches</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Tâches</Text>
+          <TouchableOpacity style={styles.ghBtn} onPress={() => setGhModalVisible(true)}>
+            <Ionicons name="logo-github" size={18} color={repos.length > 0 ? T.accentSoft : T.text3} />
+            {repos.length > 0 && <Text style={styles.ghBtnCount}>{repos.length}</Text>}
+          </TouchableOpacity>
+        </View>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statValue}>{todo.length}</Text>
@@ -234,53 +396,76 @@ export default function TasksScreen({ all, onChange }: Props) {
         ))}
       </View>
 
-      <FlatList
-        data={[
-          ...todo.map(t => ({ ...t, _section: 'todo' })),
-          ...done.map(t => ({ ...t, _section: 'done' })),
-        ]}
-        keyExtractor={t => t.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          todo.length === 0 && done.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="checkmark-done-outline" size={40} color={T.text3} />
-              <Text style={styles.emptyTitle}>Aucune tâche</Text>
-              <Text style={styles.emptyDesc}>Crée une tâche et assigne-la à un membre de l'équipe.</Text>
+      {filter === 'github' ? (
+        <FlatList
+          data={commits}
+          keyExtractor={c => `${c.repo}-${c.sha}`}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View>
+              {repos.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="logo-github" size={40} color={T.text3} />
+                  <Text style={styles.emptyTitle}>Aucun repo configuré</Text>
+                  <Text style={styles.emptyDesc}>Appuie sur l'icône GitHub en haut pour ajouter des repos.</Text>
+                </View>
+              ) : commits.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="git-commit-outline" size={40} color={T.text3} />
+                  <Text style={styles.emptyTitle}>Aucun commit chargé</Text>
+                  <Text style={styles.emptyDesc}>Appuie sur "Actualiser" dans les paramètres GitHub.</Text>
+                </View>
+              ) : (
+                <Text style={styles.sectionHeader}>Commits · {commits.length}</Text>
+              )}
             </View>
-          ) : null
-        }
-        renderItem={({ item, index }) => {
-          const prev = index > 0
-            ? ([...todo, ...done][index - 1])
-            : null;
-          const showTodoHeader = index === 0 && todo.length > 0;
-          const showDoneHeader = item._section === 'done' && (index === 0 || todo[index - 1] === undefined);
-          const isDoneSection  = item._section === 'done';
-          const firstDoneIdx   = todo.length;
-
-          return (
-            <>
-              {index === 0 && todo.length > 0 && (
-                <Text style={styles.sectionHeader}>À faire · {todo.length}</Text>
-              )}
-              {index === firstDoneIdx && done.length > 0 && (
-                <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Terminées · {done.length}</Text>
-              )}
-              <TaskCard
-                task={item}
-                profiles={all.profiles}
-                activeId={activeId}
-                onToggle={() => handleToggle(item)}
-                onEdit={() => { setEditingTask(item); setModalVisible(true); }}
-                onDelete={() => handleDelete(item)}
-              />
-            </>
-          );
-        }}
-        ListFooterComponent={<View style={{ height: 120 }} />}
-      />
+          }
+          renderItem={({ item }) => <CommitCard commit={item} />}
+          ListFooterComponent={<View style={{ height: 120 }} />}
+        />
+      ) : (
+        <FlatList
+          data={[
+            ...todo.map(t => ({ ...t, _section: 'todo' })),
+            ...done.map(t => ({ ...t, _section: 'done' })),
+          ]}
+          keyExtractor={t => t.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            todo.length === 0 && done.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="checkmark-done-outline" size={40} color={T.text3} />
+                <Text style={styles.emptyTitle}>Aucune tâche</Text>
+                <Text style={styles.emptyDesc}>Crée une tâche et assigne-la à un membre de l'équipe.</Text>
+              </View>
+            ) : null
+          }
+          renderItem={({ item, index }) => {
+            const firstDoneIdx = todo.length;
+            return (
+              <>
+                {index === 0 && todo.length > 0 && (
+                  <Text style={styles.sectionHeader}>À faire · {todo.length}</Text>
+                )}
+                {index === firstDoneIdx && done.length > 0 && (
+                  <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Terminées · {done.length}</Text>
+                )}
+                <TaskCard
+                  task={item}
+                  profiles={all.profiles}
+                  activeId={activeId}
+                  onToggle={() => handleToggle(item)}
+                  onEdit={() => { setEditingTask(item); setModalVisible(true); }}
+                  onDelete={() => handleDelete(item)}
+                />
+              </>
+            );
+          }}
+          ListFooterComponent={<View style={{ height: 120 }} />}
+        />
+      )}
 
       {/* FAB */}
       <View style={styles.fabWrapper}>
@@ -302,6 +487,15 @@ export default function TasksScreen({ all, onChange }: Props) {
         onSave={handleSave}
         onClose={() => { setModalVisible(false); setEditingTask(undefined); }}
       />
+
+      {ghModalVisible && (
+        <GitHubModal
+          repos={repos}
+          onSave={handleSaveRepos}
+          onClose={() => setGhModalVisible(false)}
+          onRefresh={() => { setGhModalVisible(false); handleRefreshCommits(); }}
+        />
+      )}
     </View>
   );
 }
@@ -309,7 +503,10 @@ export default function TasksScreen({ all, onChange }: Props) {
 const styles = StyleSheet.create({
   root:   { flex: 1, backgroundColor: T.bg },
   header: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
-  title:  { fontSize: 20, fontWeight: '900', color: T.text, letterSpacing: 4, marginBottom: 16 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  title:  { fontSize: 20, fontWeight: '900', color: T.text, letterSpacing: 4 },
+  ghBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: T.border },
+  ghBtnCount: { fontSize: 11, color: T.accentSoft, fontWeight: '700' },
   statsRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, paddingVertical: 12, borderWidth: 1, borderColor: T.border },
   stat:      { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 22, fontWeight: '800', color: T.text },
@@ -372,4 +569,44 @@ const styles = StyleSheet.create({
   fabText:      { color: '#fff', fontSize: 15, fontWeight: '700' },
   priorityTag:  { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: '#EF444422', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3, borderWidth: 1, borderColor: '#EF444455' },
   priorityTagTxt:{ fontSize: 9, fontWeight: '700', color: '#EF4444' },
+
+  commitCard: {
+    flexDirection: 'row', gap: 10, backgroundColor: T.card,
+    borderRadius: 14, marginBottom: 8, padding: 12,
+    borderWidth: 1, borderColor: T.border,
+    borderLeftWidth: 3, borderLeftColor: '#30363d',
+  },
+  commitIconWrap: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#161b22', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  commitMessage:  { fontSize: 13, fontWeight: '600', color: T.text, lineHeight: 18, marginBottom: 5 },
+  commitMeta:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  commitShaBadge: { backgroundColor: '#161b22', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 },
+  commitSha:      { fontSize: 10, color: '#58a6ff', fontWeight: '700', fontFamily: 'monospace' as any },
+  commitRepo:     { fontSize: 10, color: T.text3, fontWeight: '500' },
+  commitFooter:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  commitAuthor:   { fontSize: 10, color: T.text2, fontWeight: '600' },
+  commitDot:      { fontSize: 10, color: T.text3 },
+  commitDate:     { fontSize: 10, color: T.text3 },
+
+  ghBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)' },
+  ghSheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: T.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 20, paddingBottom: 40,
+    borderTopWidth: 1, borderTopColor: T.border,
+  },
+  ghHandle:    { width: 40, height: 4, backgroundColor: T.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  ghTitleRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  ghTitle:     { fontSize: 17, fontWeight: '800', color: T.text, flex: 1 },
+  ghRefreshBtn:{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.accentDim, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
+  ghRefreshTxt:{ fontSize: 12, color: T.accentSoft, fontWeight: '700' },
+  ghEmpty:     { fontSize: 13, color: T.text3, textAlign: 'center', paddingVertical: 12 },
+  ghRepoRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.cardAlt, borderRadius: 10, padding: 10, marginBottom: 6 },
+  ghRepoName:  { fontSize: 13, color: T.text, fontWeight: '600', flex: 1 },
+  ghSectionLabel: { fontSize: 11, color: T.text2, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 14, marginBottom: 8 },
+  ghInput:     { backgroundColor: T.input, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: T.text, fontSize: 14, borderWidth: 1, borderColor: T.border },
+  ghError:     { color: T.error, fontSize: 12, fontWeight: '600', marginTop: 6 },
+  ghAddBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, alignSelf: 'flex-start' as any, backgroundColor: T.cardAlt, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: T.border },
+  ghAddTxt:    { fontSize: 13, color: T.accentSoft, fontWeight: '700' },
+  ghSaveBtn:   { backgroundColor: T.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
+  ghSaveTxt:   { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

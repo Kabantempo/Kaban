@@ -41,12 +41,29 @@ export interface LaboSession {
   note?: string;
 }
 
+export interface GitHubRepo {
+  owner: string;
+  repo: string;
+  token?: string;
+}
+
+export interface GitHubCommit {
+  sha: string;
+  repo: string;
+  message: string;
+  author: string;
+  date: string;
+  url: string;
+}
+
 export interface AllProfiles {
   profiles: Profile[];
   activeId: string;
   data: Record<string, AppData>;
   laboSessions?: LaboSession[];
   groupTasks?: GroupTask[];
+  githubRepos?: GitHubRepo[];
+  githubCommits?: GitHubCommit[];
 }
 
 export function getHabitStreak(data: AppData, habitId: string): number {
