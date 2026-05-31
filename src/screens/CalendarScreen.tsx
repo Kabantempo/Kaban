@@ -385,10 +385,11 @@ export default function CalendarScreen({ data, all, onChange }: Props) {
                     <Text style={styles.commitGroupDate}>{date}</Text>
                     {dayCommits.map(c => {
                       const npmName = all.githubRepoNpmNames?.[c.repo];
+                      const repoLabel = npmName ?? c.repo.split('/')[1] ?? c.repo;
                       return (
                         <View key={`${c.repo}-${c.sha}`} style={styles.commitLegendRow}>
                           <Text style={styles.commitLegendSha}>{c.sha}</Text>
-                          {npmName && <Text style={styles.commitLegendNpm}>{npmName}</Text>}
+                          <Text style={npmName ? styles.commitLegendNpm : styles.commitLegendRepo}>{repoLabel}</Text>
                           <Text style={styles.commitLegendMsg} numberOfLines={1}>{c.message}</Text>
                         </View>
                       );
@@ -729,5 +730,6 @@ const styles = StyleSheet.create({
   commitLegendRow:    { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
   commitLegendSha:    { fontSize: 9, color: '#58a6ff', fontWeight: '700', backgroundColor: '#161b22', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
   commitLegendNpm:    { fontSize: 9, color: '#CB3837', fontWeight: '700', backgroundColor: '#CB383711', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
+  commitLegendRepo:   { fontSize: 9, color: '#8b949e', fontWeight: '700', backgroundColor: '#30363d', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 },
   commitLegendMsg:    { fontSize: 10, color: T.text2, flex: 1 },
 });
